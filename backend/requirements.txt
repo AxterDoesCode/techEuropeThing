@@ -5,3 +5,7 @@ shapely>=2.0
 fastapi[standard]>=0.110
 modal>=1.0
 pytest>=8
+pydantic-ai-slim[anthropic,openai,google]>=1.0
+osmnx>=2.0
+networkx>=3.2
+scipy>=1.11
