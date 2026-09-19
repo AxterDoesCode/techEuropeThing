@@ -43,7 +43,10 @@ HEARTBEAT_S = 15.0
 # long as it is open, including streams whose client has gone away without a
 # detectable disconnect. EventSource reconnects by itself and resumes from
 # Last-Event-ID, so closing loses no messages.
-MAX_LIFETIME_S = 600.0
+# Kept short because the Store is a single container: on a redeploy the new
+# container starts only after the old one has finished its open requests, so
+# this bounds the hand-over time. EventSource reconnects and resumes by id.
+MAX_LIFETIME_S = 60.0
 # Each read starts this far before the mark. Timestamps are assigned by the writer
 # before its transaction (on Modal in another container, before the RPC to the
 # Store), so a row can be committed with a timestamp slightly older than a mark
