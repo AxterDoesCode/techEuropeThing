@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { ApiError, MAX_MESSAGES, normaliseChatResponse, normaliseRouteResponse, trimHistory } from '../api'
 import type { ChatMessage } from '../api'
+import { buildMapContext } from '../mapContext'
 import routeFixture from '../fixtures/api-route.json'
 import chatFixture from '../fixtures/chat-route.json'
 
@@ -26,6 +27,18 @@ describe('normaliseChatResponse', () => {
       places: [],
       tool_calls: ["find_place('A')"],
     })
+  })
+
+  it('reads ui.route when it is a valid route body', () => {
+    const response = normaliseChatResponse({ answer: 'ok', ui: { intent: 'route', route: routeFixture, focus: null } })
+    expect(response.route?.safe.geometry.coordinates.length).toBeGreaterThan(1)
+    expect(buildMapContext('k', { ...response, tool_calls: ['walking_route((51.5324, -0.1230) -> (51.5100, -0.1303))'] }).routes).toEqual([])
+  })
+
+  it('ignores a null or invalid ui.route', () => {
+    expect(normaliseChatResponse({ answer: 'ok', ui: { route: null } }).route).toBeUndefined()
+    expect(normaliseChatResponse({ answer: 'ok', ui: { route: { fast: {}, safe: 1 } } }).route).toBeUndefined()
+    expect(normaliseChatResponse({ answer: 'ok', ui: 'x' }).route).toBeUndefined()
   })
 
   it('accepts a response with only an answer', () => {

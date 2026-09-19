@@ -34,6 +34,9 @@ export interface ChatResponse {
   sources: Source[]
   places: Place[]
   tool_calls: string[]
+  // Body of /api/route taken from the optional `ui.route` field of the chat
+  // response; absent when the response has none or it does not validate.
+  route?: RouteResponse
 }
 
 export type LngLat = [number, number]
@@ -128,8 +131,8 @@ async function requestJson(url: string, init: RequestInit): Promise<unknown> {
   return body
 }
 
-// Reads the documented fields only; unknown top-level fields (for example a
-// future `ui` object) are ignored.
+// Reads the documented fields only; unknown top-level fields are ignored. Of
+// the optional `ui` object only `ui.route` is read.
 export function normaliseChatResponse(body: unknown): ChatResponse {
   if (!isRecord(body) || typeof body.answer !== 'string') {
     throw new ApiError(502, 'The service returned a response without an answer.')
@@ -160,7 +163,15 @@ export function normaliseChatResponse(body: unknown): ChatResponse {
   const tool_calls = Array.isArray(body.tool_calls)
     ? body.tool_calls.filter((t): t is string => typeof t === 'string')
     : []
-  return { answer: body.answer, sources, places, tool_calls }
+  const response: ChatResponse = { answer: body.answer, sources, places, tool_calls }
+  if (isRecord(body.ui) && isRecord(body.ui.route)) {
+    try {
+      response.route = normaliseRouteResponse(body.ui.route)
+    } catch {
+      // An invalid `ui.route` is ignored; the map then requests the route itself.
+    }
+  }
+  return response
 }
 
 // The API accepts at most 30 messages of at most 2000 characters. The most

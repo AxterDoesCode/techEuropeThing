@@ -1,7 +1,8 @@
 // Loads the geometry that a chat response does not contain: the two walking
-// routes for each walking_route call and the hotels for each hotels_near call.
+// routes for each walking_route call (unless the response included the route
+// in `ui.route`) and the hotels for each hotels_near call.
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { fetchHotels, fetchRoute } from './api'
 import type { Hotel, RouteResponse } from './api'
 import type { MapContext } from './mapContext'
@@ -48,9 +49,16 @@ export function useContextData(context: MapContext | null): { data: ContextData 
     return () => controller.abort()
   }, [context])
 
-  if (!context || (context.routes.length === 0 && context.hotelSearches.length === 0)) {
-    return { data: null, state: 'idle' }
-  }
-  const current = data && data.key === context.key ? data : (cache.get(context.key) ?? null)
-  return { data: current, state: current ? 'done' : 'loading' }
+  // Memoised so that the map effects run only when the drawn data changes.
+  return useMemo<{ data: ContextData | null; state: LoadState }>(() => {
+    if (!context) return { data: null, state: 'idle' }
+    const included = context.includedRoute ? [context.includedRoute] : []
+    if (context.routes.length === 0 && context.hotelSearches.length === 0) {
+      if (included.length === 0) return { data: null, state: 'idle' }
+      return { data: { key: context.key, routes: included, hotels: [], failed: 0 }, state: 'done' }
+    }
+    const loaded = data && data.key === context.key ? data : (cache.get(context.key) ?? null)
+    if (!loaded) return { data: null, state: 'loading' }
+    return { data: included.length > 0 ? { ...loaded, routes: [...included, ...loaded.routes] } : loaded, state: 'done' }
+  }, [context, data])
 }

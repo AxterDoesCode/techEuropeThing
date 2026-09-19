@@ -1,6 +1,6 @@
 // Derives what the context map draws from one chat response.
 
-import type { ChatResponse, LngLat, Place } from './api'
+import type { ChatResponse, LngLat, Place, RouteResponse } from './api'
 import { parseToolCalls } from './toolCalls'
 import type { LatLng } from './toolCalls'
 
@@ -15,7 +15,11 @@ export interface MapContext {
   places: Place[]
   areas: Circle[]
   hotelSearches: Circle[]
+  // Route comparisons that have to be requested from /api/route.
   routes: { from: LatLng; to: LatLng }[]
+  // Route comparison contained in the chat response (`ui.route`). When it is
+  // present, `routes` stays empty and no route request is made.
+  includedRoute: RouteResponse | null
 }
 
 export function buildMapContext(key: string, response: ChatResponse): MapContext {
@@ -25,11 +29,12 @@ export function buildMapContext(key: string, response: ChatResponse): MapContext
     areas: [],
     hotelSearches: [],
     routes: [],
+    includedRoute: response.route ?? null,
   }
   for (const call of parseToolCalls(response.tool_calls)) {
     if (call.tool === 'area_report') context.areas.push({ lat: call.lat, lng: call.lng, radiusM: call.radiusM })
     else if (call.tool === 'hotels_near') context.hotelSearches.push({ lat: call.lat, lng: call.lng, radiusM: call.radiusM })
-    else if (call.tool === 'walking_route') context.routes.push({ from: call.from, to: call.to })
+    else if (call.tool === 'walking_route' && !context.includedRoute) context.routes.push({ from: call.from, to: call.to })
   }
   return context
 }
@@ -39,7 +44,8 @@ export function isEmptyContext(context: MapContext): boolean {
     context.places.length === 0 &&
     context.areas.length === 0 &&
     context.hotelSearches.length === 0 &&
-    context.routes.length === 0
+    context.routes.length === 0 &&
+    context.includedRoute === null
   )
 }
 
@@ -49,7 +55,8 @@ export function summariseContext(context: MapContext | null): string {
   const count = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`
   if (context.places.length) parts.push(count(context.places.length, 'place', 'places'))
   if (context.areas.length) parts.push(count(context.areas.length, 'area', 'areas'))
-  if (context.routes.length) parts.push(count(context.routes.length, 'route comparison', 'route comparisons'))
+  const routeCount = context.routes.length + (context.includedRoute ? 1 : 0)
+  if (routeCount) parts.push(count(routeCount, 'route comparison', 'route comparisons'))
   if (context.hotelSearches.length) parts.push(count(context.hotelSearches.length, 'hotel search', 'hotel searches'))
   return parts.join(', ')
 }

@@ -7,7 +7,7 @@ function heading(status: number): string {
   if (status === 0) return 'Network error'
   if (status === 429) return 'Rate limit reached'
   if (status === 503) return 'Assistant not available'
-  if (status === 502) return 'The assistant could not answer'
+  if (status === 502) return 'Service error (HTTP 502)'
   return `Request failed (HTTP ${status})`
 }
 

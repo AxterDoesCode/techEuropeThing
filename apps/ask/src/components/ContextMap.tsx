@@ -130,6 +130,12 @@ function contextBounds(context: MapContext | null, data: ContextData | null): ma
   return bounds.isEmpty() ? null : bounds
 }
 
+// Padding around the fitted bounds, reduced for a small map such as the
+// mobile panel.
+function fitPadding(container: HTMLElement): number {
+  return Math.round(Math.min(56, 0.14 * Math.min(container.clientWidth, container.clientHeight)))
+}
+
 function placeMarker(map: MapLibreMap, label: string, lng: number, lat: number): Marker {
   const el = document.createElement('div')
   el.className = 'place-marker'
@@ -188,7 +194,7 @@ export function ContextMap({ context }: { context: MapContext | null }) {
     const observer = new ResizeObserver(() => {
       map.resize()
       if (boundsRef.current && container.clientHeight > 0) {
-        map.fitBounds(boundsRef.current, { padding: 56, maxZoom: 15, duration: 0 })
+        map.fitBounds(boundsRef.current, { padding: fitPadding(container), maxZoom: 15, duration: 0 })
       }
     })
     observer.observe(container)
@@ -225,7 +231,7 @@ export function ContextMap({ context }: { context: MapContext | null }) {
     const bounds = contextBounds(context, data)
     boundsRef.current = bounds
     if (!map || !bounds) return
-    map.fitBounds(bounds, { padding: 56, maxZoom: 15, duration: 600 })
+    map.fitBounds(bounds, { padding: fitPadding(map.getContainer()), maxZoom: 15, duration: 600 })
   }, [context, data])
 
   const empty = !context || isEmptyContext(context)

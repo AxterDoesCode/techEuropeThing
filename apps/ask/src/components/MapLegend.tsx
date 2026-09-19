@@ -51,7 +51,7 @@ export function MapLegend({ context, data, loading }: Props) {
           </li>
         )}
       </ul>
-      {route && <p className="legend-note">Routes are requested again for the map; figures can differ from the answer.</p>}
+      {route && !context.includedRoute && <p className="legend-note legend-route-note">Routes are requested again for the map; figures can differ from the answer.</p>}
       {loading && <p className="legend-note">Loading map data…</p>}
       {data && data.failed > 0 && <p className="legend-note">Some map data could not be loaded.</p>}
     </div>

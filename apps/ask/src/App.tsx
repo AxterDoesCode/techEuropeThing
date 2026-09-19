@@ -168,8 +168,12 @@ export default function App() {
       </main>
       <footer className="app-footer">
         <p>
-          Answers use modelled risk from current events and police-recorded crime for the period stated in each answer (the crime data has no
-          time of day).
+          <span className="footer-data">
+            Answers come from the platform's data: modelled risk (current events combined with a baseline built from Met
+            Police recorded crime over twelve months) and police.uk recorded crime counts for one month, as stated in
+            each answer. The crime data has no time of day.{' '}
+          </span>
+          <span className="footer-data-short">Answers come from the platform's data (see About). </span>
           The assistant can be wrong; check the linked sources. Not an emergency service: call 999 in an emergency. Map
           data © OpenStreetMap contributors.
         </p>
