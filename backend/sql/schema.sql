@@ -143,6 +143,18 @@ delete from agent_runs where source_id = 'x_london';
 delete from raw_items where source_id = 'x_london';
 delete from sources where id = 'x_london';
 
+-- Hotels and rail stations from OpenStreetMap, loaded by the refresh_places job
+create table if not exists places (
+  id text primary key,
+  kind text not null,
+  name text not null,
+  lng real not null,
+  lat real not null,
+  details text not null default '{}',
+  updated_at text not null
+);
+create index if not exists places_kind_pos_idx on places (kind, lng, lat);
+
 -- Official wide-area alerts (Met Office weather warnings, UK Emergency Alerts).
 -- Not events: they are not scored and do not affect routing. Each successful
 -- poll replaces all rows of its source (backend/alerts.py, db.replace_alerts).

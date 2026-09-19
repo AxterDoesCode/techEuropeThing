@@ -118,6 +118,12 @@ class Store:
         return getattr(SqliteRepo(), method)(*args, **kwargs)
 
     @modal.method()
+    def replace_places(self, kind: str, items: list[dict[str, Any]]) -> int:
+        from . import places
+
+        return places.replace(kind, items)
+
+    @modal.method()
     def rescore(self) -> int:
         from .db import SqliteRepo
         from .pipeline import run_rescore
@@ -261,3 +267,28 @@ def build_graph(bbox: str = "") -> dict[str, Any]:
     graph_volume.commit()
     print(stats)
     return stats
+
+
+@app.function(timeout=600)
+def refresh_places() -> dict[str, int]:
+    """Load hotels and rail stations from OpenStreetMap (Overpass) into the database.
+    Run once after deploy, and again when the data should be refreshed."""
+    from . import places
+
+    counts = {}
+    for kind in places.QUERIES:
+        counts[kind] = deployed_store().replace_places.remote(kind, places.fetch(kind))
+    print(counts)
+    return counts
+
+
+@app.function(secrets=secrets, max_containers=2, timeout=180)
+@modal.concurrent(max_inputs=8)
+@modal.asgi_app()
+def chat():
+    """POST /api/chat. Separate from the Store: an answer makes several LLM requests."""
+    from . import geocode
+    from .api_chat import chat_app
+
+    geocode.use_remote(geocode_place.remote)
+    return chat_app

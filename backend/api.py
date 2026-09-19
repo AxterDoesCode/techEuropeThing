@@ -11,6 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from . import db
 from .api_alerts import router as alerts_router
 from .api_route import router as route_router
+from .api_platform import router as platform_router
 from .api_stream import router as stream_router
 from .features import event_feature
 from .models import Category, CellScore, utcnow
@@ -21,6 +22,7 @@ web.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], all
 web.add_middleware(GZipMiddleware, minimum_size=10_000)
 web.include_router(route_router)
 web.include_router(stream_router)
+web.include_router(platform_router)
 web.include_router(alerts_router)
 
 
