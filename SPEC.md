@@ -38,12 +38,11 @@ Checked on 2026-09-19 from this machine.
 | Environment Agency floods | `environment.data.gov.uk/flood-monitoring/id/floods?lat=51.5&long=-0.12&dist=30` | 200, no key | Real time | No | Flood warnings; flood area polygons available via the linked `floodArea` resource |
 | Open-Meteo | `api.open-meteo.com/v1/forecast?...&current=` | 200, no key | 15 min | No | Wind gusts, heavy rain as a city-wide modifier |
 | BBC London RSS | `feeds.bbci.co.uk/news/england/london/rss.xml` | 200 | Minutes to hours | Yes | Unstructured incident reports; requires extraction + geocoding |
-| GDELT doc API | `api.gdeltproject.org/api/v2/doc/doc?...` | 429 when called back to back; limit is 1 request per 5 s | 15 min | Yes | Wider news coverage. Poll at most once per minute |
 | Met Police news | `news.met.police.uk/rss/current_news/66871` (advertised in the newsroom page's `<link rel=alternate>`) | 200 | Hours; ~20 items, a few per day | Yes (rule-based fallback implemented) | Official incident statements and appeals. Most items are court outcomes and are rejected by the pre-filter |
 
 Not yet checked, worth adding if time allows: London Fire Brigade incident data (London Datastore), TfL JamCam locations (CCTV coverage proxy), OSM `lit=yes/no` tags (street lighting, from the same OSM extract used for routing), additional local RSS (Evening Standard, MyLondon).
 
-Considered and removed: LondonAir air quality index (built, then removed on 2026-09-19: air quality does not change a walking route, so it is not a relevant risk signal here).
+Considered and removed: GDELT doc API (dropped 2026-09-19 before being built: it only indexes articles after outlets publish them, so it is slower than polling the same outlets' RSS directly; London incident news comes from a small known set of outlets; rate limit of 1 request per 5 s); LondonAir air quality index (built, then removed on 2026-09-19: air quality does not change a walking route, so it is not a relevant risk signal here).
 
 Dropped from the Gemini spec: X/Twitter geo posts (no usable access), satellite night-light data (VIIRS resolution is ~500 m, useless per street), "Police CAD" (no public dispatch feed exists for London).
 
@@ -80,7 +79,7 @@ A single dispatcher cron is used instead of one cron per source because Modal's 
 ### Agent types
 
 1. **Structured pollers** — TfL road (`tfl_road`), TfL station disruptions (`tfl_transit`), EA floods (`ea_floods`), police.uk (one-off `backfill_police`). Deterministic field mapping. No LLM. Open-Meteo is not built. A snapshot source ends events that leave its feed; an empty fetch ends nothing unless the source sets `empty_is_valid` (floods: no warnings is the normal state).
-2. **Extraction agents** — RSS, GDELT, manual inject. Implemented so far: `met_news` with the code pre-filter, the geocoder, and a rule-based extractor (`extract_rules.py`: keyword category/severity, place from headline patterns, one incident per item) that is used while no LLM is configured. Met statements are published hours after the incident, so `met_news` events use a 24 h half-life instead of the category default. A tool-using LLM agent (`pydantic-ai`) with output type `list[ExtractedEvent]`; one article can describe zero, one or several incidents.
+2. **Extraction agents** — RSS, manual inject. Implemented so far: `met_news` with the code pre-filter, the geocoder, and a rule-based extractor (`extract_rules.py`: keyword category/severity, place from headline patterns, one incident per item) that is used while no LLM is configured. Met statements are published hours after the incident, so `met_news` events use a 24 h half-life instead of the category default. A tool-using LLM agent (`pydantic-ai`) with output type `list[ExtractedEvent]`; one article can describe zero, one or several incidents.
 
 ### Extraction agent
 
@@ -199,7 +198,7 @@ Each message is `event: <type>`, `id: <mark>`, `data: <one line of JSON>`. The m
 
 - The server reads `db.changes_since(mark)` every 2 s per connection (SQLite has no change notification). The endpoint is a coroutine; only the query runs in the threadpool, so an idle stream holds no thread. A comment line `: ping` is sent after 15 s without output.
 - Resume: the `Last-Event-ID` header (sent by EventSource on its own reconnects) takes precedence over `?since=<ISO timestamp>`; without either the stream starts at the current time. The start is limited to the last 15 minutes. Every read starts 10 s before the mark, because writers assign timestamps before their transaction (on Modal before the RPC to the Store), and rows already sent on the connection are skipped. A reconnecting client can therefore receive a message twice; all messages are idempotent.
-- The server closes each connection after 10 minutes: Modal limits request duration and every open stream occupies one of the Store container's 100 concurrent input slots. EventSource reconnects and resumes from `Last-Event-ID`.
+- The server closes each connection after 60 seconds. The Store is a single container, and on a redeploy the new container starts only after the old one has finished its open requests; a 10-minute stream lifetime caused about 2.5 minutes of downtime per deploy. Every open stream also occupies one of the container's 100 concurrent input slots. EventSource reconnects and resumes from `Last-Event-ID`.
 - Risk decay does not write a row, so an event whose risk falls below 0.05 by time alone is not reported; the client reloads `/api/events` every 5 minutes while connected.
 - `text/event-stream` is in Starlette's `GZipMiddleware` default exclusion list, so the stream is not compressed or buffered.
 
@@ -282,7 +281,7 @@ Optional Modal secret `london-risk`: `TFL_APP_KEY`, `LLM_MODEL` and the matching
 4. Frontend globe with hexagon and event layers reading the live API.
 5. Remaining structured pollers (TfL lines/stops, EA floods). Dispatcher cron. `/api/agents` and the fleet panel.
 6. police.uk baseline backfill (one-off job, 12 months, tiled over the bbox with `poly=`).
-7. Extraction agent path: pre-filter, geocode tool, `fetch_article`, `find_similar_events`, BBC RSS source, merge. Then GDELT and the Met feed. `/api/inject`.
+7. Extraction agent path: pre-filter, geocode tool, `fetch_article`, `find_similar_events`, merge. Sources: the Met feed (built), then BBC London and other direct RSS feeds. `/api/inject`.
 8. SSE, time slider, visual polish.
 9. Phase 2 routing.
 10. Stretch: corroboration agent, LFB data, lighting.

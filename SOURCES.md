@@ -26,10 +26,10 @@ Unstructured sources go through `backend/extraction.py`: a headline pre-filter, 
 
 | Source | Endpoint | Note |
 | :--- | :--- | :--- |
-| GDELT doc API | `https://api.gdeltproject.org/api/v2/doc/doc` | Limit of 1 request per 5 s |
 
 ## Removed
 
 | Source | Endpoint | Reason |
 | :--- | :--- | :--- |
 | LondonAir | `https://api.erg.ic.ac.uk/AirQuality/Hourly/MonitoringIndex/GroupName=London/Json` | Air quality does not change a walking route |
+| GDELT doc API | `https://api.gdeltproject.org/api/v2/doc/doc` | Never built. Indexes articles after outlets publish them, so it is slower than polling those outlets' RSS directly; rate limit of 1 request per 5 s |
