@@ -74,17 +74,17 @@ export default function App() {
         routeEndpoints={routeEndpoints}
         picking={routing.picking !== null}
       />
-      <header className="panel header">
-        <h1>London Live Risk Map</h1>
-        {API_BASE && (
-          <span className={`stream-status ${events.connected ? 'live' : ''}`}>{events.connected ? 'live' : 'polling'}</span>
-        )}
-        <button className="theme-toggle" onClick={toggleTheme} aria-label="Toggle light and dark mode">
-          {theme === 'dark' ? 'Light mode' : 'Dark mode'}
-        </button>
-        {error && <p className="error">{error}</p>}
-      </header>
       <aside className="left">
+        <header className="panel header">
+          <h1>London Live Risk Map</h1>
+          {API_BASE && (
+            <span className={`stream-status ${events.connected ? 'live' : ''}`}>{events.connected ? 'live' : 'polling'}</span>
+          )}
+          <button className="theme-toggle" onClick={toggleTheme} aria-label="Toggle light and dark mode">
+            {theme === 'dark' ? 'Light' : 'Dark'}
+          </button>
+          {error && <p className="error">{error}</p>}
+        </header>
         <CoordinatePanel hover={hover} fields={fields} onChange={setFields} onGo={goTo} />
         <LayerPanel crime={crime.data} showCrime={showCrime} onToggleCrime={setShowCrime} />
         <RoutePanel
