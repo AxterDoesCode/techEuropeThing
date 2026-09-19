@@ -15,6 +15,15 @@ All endpoints are public and need no key. `TFL_APP_KEY` is optional and raises t
 | MyLondon | `mylondon` | `https://www.mylondon.news/news/?service=rss` | London local news (RSS, unstructured). Polled only when an LLM is configured |
 | Met Police recorded crime | `police_uk` (one-off backfill) | `https://data.police.uk/api/crimes-street/all-crime?poly=&date=` (months: `https://data.police.uk/api/crimes-street-dates`) | Monthly street-level crime records; baseline layer and heatmap |
 
+## Official alerts (display only)
+
+These are not events: they are stored in the `alerts` table, never scored, never used for routing, and not listed in the agents panel. They are polled every 5 minutes by `poll_alerts`, spawned from the dispatcher. The client shows a small banner for alerts that cover London and are in force or start within 24 hours; amber and red by default (`/api/alerts?min_level=`).
+
+| Source | Id | Endpoint | Notes |
+| :--- | :--- | :--- | :--- |
+| Met Office weather warnings | `met_office` | `https://www.metoffice.gov.uk/public/data/PWSCache/WarningsRSS/Region/se` | London & South East region; kept when the area list contains "Greater London". Level and hazard come from the title; times are read as UTC (inferred, not documented). Terms: attribute the Met Office and link directly to the warning's page |
+| UK Emergency Alerts | `uk_emergency_alerts` | `https://www.gov.uk/alerts/feed.atom` | No levels: every alert is shown as red. In force while there is no stopped stamp; operator tests are dropped. London is matched on the alert's area text (England, UK, London, a borough). OGL |
+
 ## Geocoding (used by unstructured sources)
 
 | Service | Endpoint |
