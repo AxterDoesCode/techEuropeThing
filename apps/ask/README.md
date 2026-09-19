@@ -13,8 +13,9 @@ answer, and draws the context of the answer on a map.
   sources as links. Tool call strings that do not match a known format are ignored.
 - The map shows a marker per found place, a circle per `area_report` call, the hotel search
   area and first results per `hotels_near` call, and for `walking_route` both routes from
-  `POST /api/route` (lower-risk route prominent, shortest route thin grey). Selecting an earlier
-  answer draws its context again.
+  `POST /api/route` (lower-risk route prominent, shortest route thin grey). When the chat
+  response contains `ui.route` (the body of `/api/route`), that is drawn and no route request is
+  made. Selecting an earlier answer draws its context again.
 - The server is stateless: every request carries the conversation (at most the most recent 30
   messages, starting with a user message). The conversation is kept in `sessionStorage`.
 - Errors are shown as inline messages with the API's `detail`. 429 shows an estimated retry
