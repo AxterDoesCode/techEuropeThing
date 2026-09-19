@@ -9,7 +9,7 @@ import type { PickingInfo } from '@deck.gl/core'
 import type { CrimePoints, CrimeRow, EventFeature, FlyTarget, LngLat, RouteEndpoint, RouteResult } from '../types'
 import type { Theme } from '../theme'
 import { CATEGORY_COLOR, scoreColor } from './colors'
-import { buildCrimeIndex, summariseCrime } from './crimeIndex'
+import { buildCrimeIndex, CRIME_QUERY_RADIUS_M, summariseCrime } from './crimeIndex'
 import { EventDetail } from '../panels/EventDetail'
 import { CrimeDetail } from '../panels/CrimeDetail'
 
@@ -302,6 +302,53 @@ export function RiskMap({
     6,
     () => handlers.current.onCrimeQuery(null),
   )
+  // Area covered by the open crime summary: a circle of CRIME_QUERY_RADIUS_M on the
+  // ground around the queried position, and a dot at the position. The white line
+  // is drawn over a wider dark line so it is visible on the dark and the light
+  // basemap and over the heatmap. Not pickable: clicks inside the circle reach the
+  // map. No depth test: extruded buildings do not hide it.
+  const crimeRingAt = showCrime ? crimeAt : null
+  const crimeQueryLayers = useMemo(() => {
+    const data = crimeRingAt ? [crimeRingAt] : []
+    const ring = {
+      data,
+      getPosition: (p: LngLat): [number, number] => [p.lng, p.lat],
+      getRadius: CRIME_QUERY_RADIUS_M,
+      radiusUnits: 'meters' as const,
+      stroked: true,
+      lineWidthUnits: 'pixels' as const,
+      pickable: false,
+      parameters: { depthCompare: 'always' as const },
+    }
+    return [
+      new ScatterplotLayer<LngLat>({
+        ...ring,
+        id: 'crime-query-ring-outline',
+        filled: false,
+        getLineColor: [16, 19, 26, 200],
+        getLineWidth: 5,
+      }),
+      new ScatterplotLayer<LngLat>({
+        ...ring,
+        id: 'crime-query-ring',
+        filled: true,
+        getFillColor: [255, 255, 255, 26],
+        getLineColor: [255, 255, 255, 255],
+        getLineWidth: 2,
+      }),
+      new ScatterplotLayer<LngLat>({
+        ...ring,
+        id: 'crime-query-centre',
+        getRadius: 3,
+        radiusUnits: 'pixels',
+        filled: true,
+        getFillColor: [255, 255, 255, 255],
+        getLineColor: [16, 19, 26, 230],
+        getLineWidth: 1.5,
+      }),
+    ]
+  }, [crimeRingAt])
+
   const crimeAvailable = showCrime && crimeIndex !== null && projection === 'mercator'
   useEffect(() => {
     crimeClickable.current = crimeAvailable
@@ -354,7 +401,14 @@ export function RiskMap({
         pickable: true,
         updateTriggers: { getLineColor: selectedId },
       }),
-      // Clickable marker for every event, tinted by category
+    ]
+  }, [events, crime, showCrime, crimeOpacity, heatRadius, selectedId, projection])
+
+  // Clickable marker for every event, tinted by category. A separate list because
+  // the crime query circle is drawn between the layers above and the markers.
+  const markerLayers = useMemo(() => {
+    const isSelected = (f: EventFeature) => f.properties.id === selectedId
+    return [
       new ScatterplotLayer<EventFeature>({
         id: 'event-markers',
         data: events,
@@ -372,11 +426,11 @@ export function RiskMap({
         updateTriggers: { getRadius: selectedId, getLineWidth: selectedId },
       }),
     ]
-  }, [events, crime, showCrime, crimeOpacity, heatRadius, selectedId, projection])
+  }, [events, selectedId])
 
   useEffect(() => {
     overlayRef.current?.setProps({
-      layers: [...layers, ...routeLayers],
+      layers: [...layers, ...crimeQueryLayers, ...markerLayers, ...routeLayers],
       onClick: (info: PickingInfo) => {
         const feature = info.object as EventFeature | undefined
         if (pickingRef.current && info.coordinate) {
@@ -392,7 +446,7 @@ export function RiskMap({
       getTooltip: (info: PickingInfo) => (info.object as EventFeature | undefined)?.properties?.title ?? null,
       getCursor: ({ isHovering }: { isHovering: boolean }) => (isHovering ? 'pointer' : 'crosshair'),
     })
-  }, [layers, routeLayers])
+  }, [layers, crimeQueryLayers, markerLayers, routeLayers])
 
   return (
     <>
