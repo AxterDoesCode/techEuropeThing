@@ -28,6 +28,8 @@ export interface EventProps {
   source_ids: string[]
   urls: string[]
   risk: number
+  // Announced in docs/API.md as a later addition; absent in current responses
+  subtype?: string | null
 }
 
 export type EventFeature = Feature<Geometry, EventProps>
