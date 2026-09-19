@@ -132,3 +132,8 @@ delete from events where external_ref like 'reddit_london:%';
 delete from agent_runs where source_id = 'reddit_london';
 delete from raw_items where source_id = 'reddit_london';
 delete from sources where id = 'reddit_london';
+delete from event_refs where external_ref like 'x_london:%';
+delete from events where external_ref like 'x_london:%';
+delete from agent_runs where source_id = 'x_london';
+delete from raw_items where source_id = 'x_london';
+delete from sources where id = 'x_london';
