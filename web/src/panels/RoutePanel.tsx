@@ -114,8 +114,10 @@ export function RoutePanel({ fields, origin, destination, picking, route, onChan
             </tbody>
           </table>
           <p className="meta">
-            Safe route: {route.extra_distance_m >= 0 ? '+' : '−'}{km(Math.abs(route.extra_distance_m))},{' '}
-            {(route.risk_reduction * 100).toFixed(0)}% lower mean risk (alpha {route.alpha}). {route.attribution}
+            {route.risk_reduction <= 0.005
+              ? 'No lower-risk alternative at this setting. '
+              : `Safe route: ${route.extra_distance_m >= 0 ? '+' : '−'}${km(Math.abs(route.extra_distance_m))}, ${(route.risk_reduction * 100).toFixed(0)}% lower mean risk (alpha ${route.alpha}). `}
+            {route.attribution}
           </p>
         </div>
       )}

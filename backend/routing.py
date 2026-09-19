@@ -220,16 +220,15 @@ def edge_baseline(graph: Graph, crime_rows: Iterable[Sequence[Any]]) -> np.ndarr
     if not rows:
         return np.zeros(2 * m, dtype=np.float32)
     data = np.asarray(rows, dtype=np.float64)
-    tree = cKDTree(_xy(data[:, 0], data[:, 1]))
+    points = cKDTree(_xy(data[:, 0], data[:, 1]))
     weights = data[:, 2]
 
     mid = (graph.geom_offsets[:-1] + graph.geom_offsets[1:] - 1) // 2
-    mids = _xy(graph.geom_coords[mid, 0], graph.geom_coords[mid, 1])
-    density = np.zeros(m, dtype=np.float64)
-    for i, near in enumerate(tree.query_ball_point(mids, BASELINE_RADIUS_M)):
-        if near:
-            d = np.linalg.norm(tree.data[near] - mids[i], axis=1)
-            density[i] = float(np.sum(weights[near] * (1.0 - d / BASELINE_RADIUS_M)))
+    mids = cKDTree(_xy(graph.geom_coords[mid, 0], graph.geom_coords[mid, 1]))
+    # All (segment, crime point) pairs within the radius, computed in one call
+    pairs = mids.sparse_distance_matrix(points, BASELINE_RADIUS_M, output_type="coo_matrix")
+    contribution = weights[pairs.col] * (1.0 - pairs.data / BASELINE_RADIUS_M)
+    density = np.bincount(pairs.row, weights=contribution, minlength=m)
 
     cap = math.log1p(float(np.percentile(density, BASELINE_CLIP_PERCENTILE))) or 1.0
     undirected = np.minimum(1.0, np.log1p(density) / cap).astype(np.float32)

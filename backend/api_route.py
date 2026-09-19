@@ -16,9 +16,6 @@ from .scoring import FINE_RES
 
 router = APIRouter()
 
-SCORE_PAD_M = 1500.0
-_M_PER_DEG_LAT = 111_320.0
-_M_PER_DEG_LNG = 69_300.0  # at latitude 51.5
 
 _graph: routing.Graph | None = None
 _graph_path: str | None = None
@@ -61,16 +58,12 @@ class RouteRequest(BaseModel):
         return p
 
 
-def _scores_near(origin: tuple[float, float], destination: tuple[float, float]) -> dict[str, float]:
-    pad_lng, pad_lat = SCORE_PAD_M / _M_PER_DEG_LNG, SCORE_PAD_M / _M_PER_DEG_LAT
-    bbox = (
-        min(origin[0], destination[0]) - pad_lng,
-        min(origin[1], destination[1]) - pad_lat,
-        max(origin[0], destination[0]) + pad_lng,
-        max(origin[1], destination[1]) + pad_lat,
-    )
-    # Live component only: the crime baseline is applied per street, not per cell
-    return {c.h3: c.live for c in db.cell_scores(FINE_RES, 0.0, bbox) if c.live > 0}
+def _live_scores(graph: routing.Graph) -> dict[str, float]:
+    """Live component of every cell in the graph area. The crime baseline is
+    applied per street, not per cell. The whole area is read, not a window around
+    the two points: cells outside a window would count as risk 0 and the safe
+    route would be drawn out of the window through them."""
+    return {c.h3: c.live for c in db.cell_scores(FINE_RES, 0.0, graph.bbox) if c.live > 0}
 
 
 def get_baseline(graph: routing.Graph) -> Any:
@@ -87,6 +80,12 @@ def get_baseline(graph: routing.Graph) -> Any:
         return _baseline[2]
 
 
+def warm_up() -> None:
+    """Load the graph and compute the baseline ahead of the first request."""
+    if Path(graph_path()).is_file():
+        get_baseline(get_graph())
+
+
 @router.post("/api/route")
 def post_route(req: RouteRequest) -> dict[str, Any]:
     graph = get_graph()
@@ -95,7 +94,7 @@ def post_route(req: RouteRequest) -> dict[str, Any]:
             graph,
             req.origin,
             req.destination,
-            _scores_near(req.origin, req.destination),
+            _live_scores(graph),
             req.alpha,
             baseline=get_baseline(graph),
         )

@@ -56,6 +56,7 @@ SNAPSHOT_INTERVAL_S = 30
     max_containers=1,
     min_containers=1,
     timeout=3600,
+    cpu=1.0,
     memory=2048,
     secrets=secrets,
 )
@@ -75,6 +76,11 @@ class Store:
         db.connect(LOCAL_PATH)
         self._stop = threading.Event()
         threading.Thread(target=self._snapshot_loop, daemon=True).start()
+        # Routing graph and street baseline are prepared in the background so the
+        # first /api/route request does not wait for them
+        from .api_route import warm_up
+
+        threading.Thread(target=warm_up, daemon=True).start()
 
     def _snapshot(self) -> None:
         from . import db
