@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import os
 import threading
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -49,6 +50,11 @@ class RouteRequest(BaseModel):
     origin: tuple[float, float] = Field(description="[lng, lat]")
     destination: tuple[float, float] = Field(description="[lng, lat]")
     alpha: float = Field(routing.DEFAULT_ALPHA, ge=0, le=10)
+    depart_at: datetime | None = Field(
+        None,
+        description="ISO 8601 departure time, used for the night multiplier on the crime"
+        " baseline; without a UTC offset it is read as London local time. Default: now.",
+    )
 
     @field_validator("origin", "destination")
     @classmethod
@@ -97,6 +103,7 @@ def post_route(req: RouteRequest) -> dict[str, Any]:
             _live_scores(graph),
             req.alpha,
             baseline=get_baseline(graph),
+            depart_at=req.depart_at or datetime.now(routing.LONDON_TZ),
         )
     except routing.RouteError as exc:
         raise HTTPException(422, str(exc))

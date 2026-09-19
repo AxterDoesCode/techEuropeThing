@@ -79,12 +79,34 @@ export interface CrimePoints {
   rows: CrimeRow[]
 }
 
+export interface RouteStep {
+  instruction: string
+  street: string | null
+  distance_m: number
+  duration_s: number
+  // the majority of the step's length is lit
+  lit: boolean
+  // length-weighted mean risk of the step
+  risk: number
+  start: [number, number]
+}
+
 export interface RouteLeg {
   geometry: { type: 'LineString'; coordinates: [number, number][] }
   length_m: number
   duration_min: number
   mean_risk: number
+  // The safe route minimises a cost, not the maximum: its max_risk can be above the fast route's
   max_risk: number
+  // The fields below are absent in responses of a backend older than the road-class graph.
+  // Placeholder whole-route score in [0, 1): 1000 m at risk 0.5 gives 0.5
+  path_risk?: number
+  // share of the length that is lit / on trunk, primary, secondary or tertiary road centrelines
+  lit_share?: number
+  main_road_share?: number
+  park_m?: number
+  underpass_m?: number
+  steps?: RouteStep[]
 }
 
 export interface RouteResult {
@@ -92,6 +114,9 @@ export interface RouteResult {
   safe: RouteLeg
   alpha: number
   beta: number
+  gamma?: number
+  // factor applied to the crime baseline for the departure time, 1 by day up to 1.3 at 03:00
+  night_multiplier?: number
   risk_reduction: number
   extra_distance_m: number
   attribution: string

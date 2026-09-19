@@ -252,19 +252,28 @@ def backfill_police(month: str = "") -> dict[str, int]:
     return counts
 
 
-@app.function(volumes={GRAPH_DIR: graph_volume}, timeout=3600, memory=8192)
+# Greater London is downloaded from the public Overpass server in about 20 tiles
+# (two queries each, rate limited) and held unsimplified in memory before it is
+# simplified. Measured: one central 12 km tile is 333k raw nodes and 1.9 GB peak;
+# the whole area is estimated at 6-8 times that. The limits include a margin.
+@app.function(volumes={GRAPH_DIR: graph_volume}, timeout=6 * 3600, memory=32768)
 def build_graph(bbox: str = "") -> dict[str, Any]:
     """Build the walking graph from OpenStreetMap into the graph Volume. Redeploy
     afterwards so the Store container loads the new file.
 
-    bbox is "west,south,east,north"; empty = inner London."""
+    bbox is "west,south,east,north"; empty = Greater London. The Overpass
+    responses are cached in the Volume, so a run that timed out continues from
+    the tiles it already has when it is started again."""
     from pathlib import Path
 
     from .tools import build_graph as tool
 
-    box = tuple(float(v) for v in bbox.split(",")) if bbox else tool.INNER_LONDON
-    stats = tool.build(box, Path(GRAPH_PATH), 1800, None)
-    graph_volume.commit()
+    box = tuple(float(v) for v in bbox.split(",")) if bbox else tool.GREATER_LONDON
+    try:
+        # the commit after each downloaded tile keeps the cache if the container is stopped
+        stats = tool.build(box, Path(GRAPH_PATH), 5 * 3600, None, on_tile=graph_volume.commit)
+    finally:
+        graph_volume.commit()
     print(stats)
     return stats
 

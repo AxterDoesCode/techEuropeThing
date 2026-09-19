@@ -32,6 +32,19 @@ function LegRow({ name, leg }: { name: 'fast' | 'safe'; leg: RouteLeg }) {
   )
 }
 
+const pct = (share: number) => `${Math.round(share * 100)}%`
+
+function ShareRow({ name, leg }: { name: 'fast' | 'safe'; leg: RouteLeg }) {
+  return (
+    <tr>
+      <th><span className={`swatch ${name}`} />{name === 'fast' ? 'Fast' : 'Safe'}</th>
+      <td>{leg.path_risk?.toFixed(2) ?? '–'}</td>
+      <td>{leg.lit_share === undefined ? '–' : pct(leg.lit_share)}</td>
+      <td>{leg.main_road_share === undefined ? '–' : pct(leg.main_road_share)}</td>
+    </tr>
+  )
+}
+
 // Walking route request: two endpoints (typed or picked on the map), the risk
 // weight alpha, and a comparison of the shortest route with the risk-weighted one.
 export function RoutePanel({ fields, origin, destination, picking, route, onChange, onPick, onRoute }: Props) {
@@ -113,10 +126,24 @@ export function RoutePanel({ fields, origin, destination, picking, route, onChan
               <LegRow name="safe" leg={route.safe} />
             </tbody>
           </table>
+          {route.safe.path_risk !== undefined && (
+            <table>
+              <thead>
+                <tr><th /><th title="Placeholder score of the whole route, 0 to 1">Path risk</th><th>Lit</th><th>Main roads</th></tr>
+              </thead>
+              <tbody>
+                <ShareRow name="fast" leg={route.fast} />
+                <ShareRow name="safe" leg={route.safe} />
+              </tbody>
+            </table>
+          )}
           <p className="meta">
             {route.risk_reduction <= 0.005
-              ? 'No lower-risk alternative at this setting. '
+              ? route.extra_distance_m === 0
+                ? 'No lower-risk alternative at this setting. '
+                : `Safe route chosen for road type and lighting, not lower mean risk: ${route.extra_distance_m >= 0 ? '+' : '−'}${km(Math.abs(route.extra_distance_m))}. `
               : `Safe route: ${route.extra_distance_m >= 0 ? '+' : '−'}${km(Math.abs(route.extra_distance_m))}, ${(route.risk_reduction * 100).toFixed(0)}% lower mean risk (alpha ${route.alpha}). `}
+            {(route.night_multiplier ?? 1) > 1 && `Night-time crime weight ×${route.night_multiplier!.toFixed(2)}. `}
             {route.attribution}
           </p>
         </div>
