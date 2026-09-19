@@ -1,4 +1,12 @@
-"""TfL road disruptions: works, closures, collisions and planned events."""
+"""TfL road incidents: collisions, emergency-service incidents, hazards and demonstrations.
+
+Product rule (owner): the map covers pedestrian safety only. "Only consider
+events that could have an effect on the user route." Road incidents are kept;
+roadworks of every kind, asset faults, traffic-delay notices, vehicle breakdowns
+and planned events other than demonstrations and marches (sporting, concert,
+exhibition, ceremonial, filming, ...) are convenience information and produce
+no event.
+"""
 
 from __future__ import annotations
 
@@ -23,16 +31,58 @@ from .base import external_ref
 
 URL = "https://api.tfl.gov.uk/Road/all/Disruption"
 
-SEVERITY = {
-    "Minimal": 0.1,
-    "Moderate": 0.3,
-    "Serious": 0.55,
-    "Severe": 0.8,
+# Owner's rule: keep incidents relevant to a person on foot (collisions,
+# emergency-service incidents, hazards, weather hazards, demonstrations and
+# marches); drop convenience information.
+#
+# Kept: ANY subCategory under the upstream categories in KEPT_CATEGORIES, plus the
+# pair Planned events / Demonstration/March. An unknown subCategory under a kept
+# category is kept, because the category already identifies an incident. Every
+# other category is dropped, including categories added upstream later.
+#
+# Observed and dropped: Works/* (Borough, Collaborative, Construction activity,
+# Motorways, Network Rail, TfL, Utility works), Asset issues/* (Asset fault,
+# Asset maintenance), Network delays/* (Heavy traffic, Service disruption),
+# Breakdowns/Vehicle breakdown, and Planned events/* other than
+# Demonstration/March (Abnormal load, Celebration, Ceremonial, Commemoration,
+# Concert, Exhibition, Filming, Security barriers (HVM), Shopping, Sporting).
+#
+# The values are those observed in the feed (date-range queries for 2025-01 to
+# 2027-03, run on 2026-09-19). TfL does not document them: Road/Meta/Categories
+# and the TIMS feed specification list an older vocabulary ("Hazard(s)",
+# "Traffic Incidents", ...) that the feed's `category` field does not use.
+#
+# Upstream `severity` is ignored. It rates the traffic delay, not the danger to
+# a person on foot: a road closed for police activity has been observed with
+# severity "No impact".
+#
+# No Category value describes a collision or an emergency-service incident;
+# ROAD_CLOSURE is the closest existing value (group "road").
+#
+# REVISIT(severity-scale): the severities are provisional values.
+#
+# upstream category -> (event category, severity) for any subCategory
+KEPT_CATEGORIES: dict[str, tuple[Category, float]] = {
+    "Collisions": (Category.ROAD_CLOSURE, 0.4),
+    "Emergency service incidents": (Category.ROAD_CLOSURE, 0.4),
+    "Hazards": (Category.ROAD_CLOSURE, 0.4),
+    # Not Category.WEATHER: its default radius (2000 m) describes an area-wide
+    # weather warning, not a hazard on one road.
+    "Weather": (Category.ROAD_CLOSURE, 0.4),
+}
+# (upstream category, subCategory) -> (event category, severity). Takes precedence
+# over KEPT_CATEGORIES.
+KEPT_PAIRS: dict[tuple[str, str], tuple[Category, float]] = {
+    ("Hazards", "Fire"): (Category.FIRE, 0.6),
+    ("Weather", "Flooding"): (Category.FLOOD, 0.4),
+    ("Planned events", "Demonstration/March"): (Category.DISORDER, 0.35),
 }
 
-SUBCATEGORY_TO_CATEGORY = {
-    "Demonstration/March": Category.DISORDER,
-}
+
+def classify(d: dict[str, Any]) -> tuple[Category, float] | None:
+    """Event category and severity of a feed item. None when the item is dropped."""
+    category = d.get("category") or ""
+    return KEPT_PAIRS.get((category, d.get("subCategory") or "")) or KEPT_CATEGORIES.get(category)
 
 
 class TflRoadSource:
@@ -45,6 +95,10 @@ class TflRoadSource:
             params["app_key"] = key
         resp = httpx.get(URL, params=params, timeout=30)
         resp.raise_for_status()
+        # Dropped items are returned too and are filtered in to_event(). run_poll
+        # skips end_missing when a snapshot fetch returns no items, so a result
+        # reduced to the kept items would be empty whenever no incident is
+        # listed, and the stored incidents would then never be marked ended.
         items = [
             RawItem(source_id=self.id, external_id=d["id"], payload=d) for d in resp.json()
         ]
@@ -52,25 +106,25 @@ class TflRoadSource:
 
     def to_event(self, raw: RawItem) -> Event | None:
         d = raw.payload
-        severity = SEVERITY.get(d.get("severity", ""))
-        if severity is None:  # "No impact" and unknown values
+        kept = classify(d)
+        if kept is None:
             return None
+        category, severity = kept
 
         lng, lat = json.loads(d["point"])
         if not in_london(lng, lat):
             return None
 
         # Most specific geometry available: affected street segments, then the
-        # works-area polygon, then the single point.
+        # disruption-area polygon, then the single point.
         geometry: dict[str, Any] = {"type": "Point", "coordinates": [lng, lat]}
         if lines := _street_lines(d):
             geometry = {"type": "MultiLineString", "coordinates": lines}
         elif (g := d.get("geometry")) and shape(g).is_valid:
             geometry = {"type": g["type"], "coordinates": g["coordinates"]}
 
-        category = SUBCATEGORY_TO_CATEGORY.get(d.get("subCategory", ""), Category.ROAD_CLOSURE)
         confidence = SOURCE_TYPE_CONFIDENCE["official_feed"]
-        sub = d.get("subCategory") or d.get("category") or "Disruption"
+        sub = d.get("subCategory") or d["category"]
         return Event(
             external_ref=external_ref(raw),
             category=category,
