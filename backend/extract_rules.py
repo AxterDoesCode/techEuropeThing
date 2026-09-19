@@ -42,9 +42,9 @@ _CATEGORY_RULES: list[tuple[re.Pattern[str], Category, str | None, float]] = [
     (re.compile(r"\bacid\b", re.I), Category.VIOLENT_CRIME, "acid_attack", 0.8),
     (re.compile(r"\b(rape|sexual assault)\w*", re.I), Category.VIOLENT_CRIME, "sexual_assault", 0.8),
     (re.compile(r"\bkidnap\w*", re.I), Category.VIOLENT_CRIME, None, 0.8),
-    (re.compile(r"\b(armed robber|knifepoint|gunpoint)\w*", re.I), Category.VIOLENT_CRIME, "robbery", 0.7),
+    (re.compile(r"\b(armed robb|knifepoint|gunpoint)\w*", re.I), Category.VIOLENT_CRIME, "robbery", 0.7),
     (re.compile(r"\b(assault|attack)\w*", re.I), Category.VIOLENT_CRIME, "assault", 0.7),
-    (re.compile(r"\b(robber|mugg)\w*", re.I), Category.VIOLENT_CRIME, "robbery", 0.5),
+    (re.compile(r"\b(robb|mugg)\w*", re.I), Category.VIOLENT_CRIME, "robbery", 0.5),
     (re.compile(r"\b(riot|disorder)\w*", re.I), Category.DISORDER, "violent_disorder", 0.6),
     (re.compile(r"\b(protest|demonstrat)\w*", re.I), Category.DISORDER, "peaceful_protest", 0.3),
     (re.compile(r"\b(fires?|blaze|firefighters)\b", re.I), Category.FIRE, "fire", 0.2),
@@ -67,8 +67,9 @@ _RECENT = re.compile(
     r"(?:on|last) (?:mon|tues|wednes|thurs|fri|satur|sun)day)\b",
     re.I,
 )
-# Headlines of delayed reporting. Without a date or recent wording such an item is dropped.
-_DELAYED = re.compile(r"\b(appeal|witness|anniversary|years? ago|months? ago|last year|renew|reward|cctv)\w*", re.I)
+# Headline wording of delayed reporting (police appeals are often published months
+# after the offence). Such an item is kept only with a stated date or recent wording.
+_DELAYED = re.compile(r"\b(appeal|anniversary|years? ago|months? ago|last year|renew|reward)\w*", re.I)
 
 _MONTHS = ["january", "february", "march", "april", "may", "june", "july", "august", "september",
            "october", "november", "december"]
@@ -112,7 +113,7 @@ def extract(title: str, description: str = "", published_at: datetime | None = N
     if subtype == "fire" and _LARGE_FIRE.search(text):
         severity = 0.6
     occurred_at = stated_date(text, published_at)
-    is_recent = bool(_RECENT.search(text)) or not _DELAYED.search(text)
+    is_recent = bool(_RECENT.search(text)) or not _DELAYED.search(title)
     for source in (title, description):
         for m in _PLACE.finditer(source):
             place = m.group(1).strip(" .,")
