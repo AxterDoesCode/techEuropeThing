@@ -38,6 +38,12 @@ export interface LngLat {
   lat: number
 }
 
+// [west, south, east, north]
+export type BBox = [number, number, number, number]
+
+// Where the map is asked to move: a position with an optional zoom, or an area
+export type FlyTarget = (LngLat & { zoom?: number }) | { bbox: BBox }
+
 export interface Cell {
   h3: string
   res: number

@@ -1,17 +1,21 @@
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { API_BASE, CRIME_REFRESH_MS, fetchAgents, fetchCrimePoints, POLL_INTERVAL_MS } from './api'
 import { usePolling } from './usePolling'
 import { useLiveEvents } from './useLiveEvents'
-import { RiskMap } from './map/RiskMap'
+import { RiskMap, type MapTarget } from './map/RiskMap'
 import { EventFeed } from './panels/EventFeed'
 import { CoordinatePanel, type CoordinateFields } from './panels/CoordinatePanel'
 import { AgentPanel } from './panels/AgentPanel'
 import { LayerPanel } from './panels/LayerPanel'
 import { RoutePanel } from './panels/RoutePanel'
+import { SearchBox } from './panels/SearchBox'
 import { useRouteState } from './route'
 import { formatCoord } from './format'
 import { useTheme } from './theme'
-import type { EventFeature, LngLat } from './types'
+import { useLayerSettings, type LayerSettings } from './layerSettings'
+import { isEventShown, listSources } from './eventFilter'
+import type { PlaceResult } from './search'
+import type { EventFeature, FlyTarget, LngLat } from './types'
 
 export default function App() {
   const events = useLiveEvents()
@@ -24,23 +28,70 @@ export default function App() {
   }, [agentRuns])
   const agents = usePolling(loadAgents, POLL_INTERVAL_MS)
   const crime = usePolling(fetchCrimePoints, CRIME_REFRESH_MS)
-  const [showCrime, setShowCrime] = useState(true)
+  const [settings, updateSettings] = useLayerSettings()
 
   const [selectedId, setSelectedId] = useState<string | null>(null)
-  const [target, setTarget] = useState<(LngLat & { zoom?: number; nonce: number }) | null>(null)
+  // Position of the crime summary popup. At most one popup is open: selecting an
+  // event clears this, and a crime query clears the selection.
+  const [crimeAt, setCrimeAt] = useState<LngLat | null>(null)
+  const [target, setTarget] = useState<MapTarget | null>(null)
   const [hover, setHover] = useState<LngLat | null>(null)
   const [fields, setFields] = useState<CoordinateFields>({ lng: '', lat: '' })
   const [theme, toggleTheme] = useTheme()
   const routing = useRouteState()
 
-  const features = events.events
-  const crimeRows = useMemo(() => (showCrime ? (crime.data?.rows ?? []) : []), [showCrime, crime.data])
+  // Source and minimum risk filters apply to the map and the feed alike
+  const allEvents = events.events
+  const disabledSources = useMemo(() => new Set(settings.disabledSources), [settings.disabledSources])
+  const features = useMemo(
+    () => allEvents.filter((e) => isEventShown(e, disabledSources, settings.minRisk)),
+    [allEvents, disabledSources, settings.minRisk],
+  )
+  const sources = useMemo(() => listSources(allEvents, disabledSources), [allEvents, disabledSources])
   const error = events.error ?? agents.error ?? crime.error
 
-  const selectFromFeed = useCallback((e: EventFeature) => {
-    setSelectedId(e.properties.id)
-    setTarget({ lng: e.properties.lng, lat: e.properties.lat, zoom: 15, nonce: Date.now() })
+  const selectEvent = useCallback((id: string | null) => {
+    setSelectedId(id)
+    if (id !== null) setCrimeAt(null)
   }, [])
+  const queryCrime = useCallback((pos: LngLat | null) => {
+    setCrimeAt(pos)
+    if (pos !== null) setSelectedId(null)
+  }, [])
+  const changeSettings = useCallback(
+    (patch: Partial<LayerSettings>) => {
+      updateSettings(patch)
+      if (patch.showCrime === false) setCrimeAt(null)
+    },
+    [updateSettings],
+  )
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return
+      setSelectedId(null)
+      setCrimeAt(null)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
+
+  // Moves the map to a position (optional zoom) or fits an area given as
+  // { bbox: [west, south, east, north] }. Used by the Position panel and the search box.
+  const flyTo = useCallback((to: FlyTarget) => setTarget({ ...to, nonce: Date.now() }), [])
+  // Areas and streets carry a bbox; stations, postcodes and coordinates are points
+  const flyToPlace = useCallback(
+    (place: PlaceResult) => flyTo(place.bbox ? { bbox: place.bbox } : { lng: place.lng, lat: place.lat, zoom: 15 }),
+    [flyTo],
+  )
+  const resetView = useCallback(() => setTarget({ home: true, nonce: Date.now() }), [])
+
+  const selectFromFeed = useCallback(
+    (e: EventFeature) => {
+      selectEvent(e.properties.id)
+      flyTo({ lng: e.properties.lng, lat: e.properties.lat, zoom: 15 })
+    },
+    [selectEvent, flyTo],
+  )
   const copyToFields = useCallback(
     (pos: LngLat) => setFields({ lng: formatCoord(pos.lng), lat: formatCoord(pos.lat) }),
     [],
@@ -57,16 +108,21 @@ export default function App() {
     () => ({ origin: routing.origin, destination: routing.destination }),
     [routing.origin, routing.destination],
   )
-  const goTo = useCallback((pos: LngLat) => setTarget({ ...pos, nonce: Date.now() }), [])
+  const sidebarOpen = !settings.sidebarCollapsed
 
   return (
     <div className="app">
       <RiskMap
         events={features}
-        crimeRows={crimeRows}
+        crime={crime.data}
+        showCrime={settings.showCrime}
+        crimeOpacity={settings.crimeOpacity}
+        crimeAt={crimeAt}
+        onCrimeQuery={queryCrime}
         selectedId={selectedId}
         target={target}
-        onSelect={setSelectedId}
+        sidebarOpen={sidebarOpen}
+        onSelect={selectEvent}
         onHover={setHover}
         onMapClick={onMapClick}
         theme={theme}
@@ -74,7 +130,8 @@ export default function App() {
         routeEndpoints={routeEndpoints}
         picking={routing.picking !== null}
       />
-      <aside className="left">
+      {/* Kept mounted while collapsed so the panels keep their state */}
+      <aside className="left" hidden={!sidebarOpen}>
         <header className="panel header">
           <h1>London Live Risk Map</h1>
           {API_BASE && (
@@ -83,10 +140,22 @@ export default function App() {
           <button className="theme-toggle" onClick={toggleTheme} aria-label="Toggle light and dark mode">
             {theme === 'dark' ? 'Light' : 'Dark'}
           </button>
+          <div className="view-controls">
+            <button type="button" onClick={resetView}>Reset view</button>
+            <button type="button" onClick={() => changeSettings({ sidebarCollapsed: true })}>Hide sidebar</button>
+          </div>
           {error && <p className="error">{error}</p>}
         </header>
-        <CoordinatePanel hover={hover} fields={fields} onChange={setFields} onGo={goTo} />
-        <LayerPanel crime={crime.data} showCrime={showCrime} onToggleCrime={setShowCrime} />
+        <SearchBox onSelect={flyToPlace} />
+        <CoordinatePanel hover={hover} fields={fields} onChange={setFields} onGo={flyTo} />
+        <LayerPanel
+          crime={crime.data}
+          settings={settings}
+          onChange={changeSettings}
+          sources={sources}
+          totalEvents={allEvents.length}
+          shownEvents={features.length}
+        />
         <RoutePanel
           fields={routing.fields}
           origin={routing.origin}
@@ -97,9 +166,21 @@ export default function App() {
           onPick={routing.setPicking}
           onRoute={routing.setRoute}
         />
-        <EventFeed events={features} newIds={events.newIds} selectedId={selectedId} onSelect={selectFromFeed} />
+        <EventFeed
+          events={features}
+          total={allEvents.length}
+          newIds={events.newIds}
+          selectedId={selectedId}
+          onSelect={selectFromFeed}
+        />
         <AgentPanel agents={agents.data ?? []} />
       </aside>
+      {!sidebarOpen && (
+        <div className="panel view-controls collapsed-controls">
+          <button type="button" onClick={() => changeSettings({ sidebarCollapsed: false })}>Show sidebar</button>
+          <button type="button" onClick={resetView}>Reset view</button>
+        </div>
+      )}
     </div>
   )
 }
