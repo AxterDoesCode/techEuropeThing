@@ -16,31 +16,39 @@ from .models import LONDON_BBOX, in_london, utcnow
 
 OVERPASS_URLS = [
     "https://overpass-api.de/api/interpreter",
+    "https://overpass.private.coffee/api/interpreter",
     "https://overpass.kumi.systems/api/interpreter",
+    "https://maps.mail.ru/osm/tools/overpass/api/interpreter",
 ]
 USER_AGENT = "london-live-risk-map/0.1 (hackathon project)"
 
+# Exact-match filters on nodes and ways: regular expressions and relations make
+# the query slow enough for public servers to time out on a London-wide box.
 QUERIES = {
-    "hotel": 'nwr["tourism"~"^(hotel|hostel|guest_house|apartment)$"]["name"]',
-    "station": 'nwr["railway"="station"]["name"]',
+    "hotel": [f'{t}["tourism"="{v}"]["name"]' for v in ("hotel", "hostel", "guest_house") for t in ("node", "way")],
+    "station": [f'{t}["railway"="station"]["name"]' for t in ("node", "way")],
 }
 
 
 def overpass_query(kind: str) -> str:
     w, s, e, n = LONDON_BBOX
-    return f"[out:json][timeout:120];{QUERIES[kind]}({s},{w},{n},{e});out center tags;"
+    filters = "".join(f"{q}({s},{w},{n},{e});" for q in QUERIES[kind])
+    return f"[out:json][timeout:90];({filters});out center tags;"
 
 
 def fetch(kind: str) -> list[dict[str, Any]]:
-    last_error: Exception | None = None
+    errors = []
     for url in OVERPASS_URLS:
         try:
-            resp = httpx.post(url, data={"data": overpass_query(kind)}, headers={"User-Agent": USER_AGENT}, timeout=180)
+            resp = httpx.post(url, data={"data": overpass_query(kind)}, headers={"User-Agent": USER_AGENT}, timeout=120)
             resp.raise_for_status()
-            return parse(resp.json(), kind)
+            places = parse(resp.json(), kind)
+            if places:
+                return places
+            errors.append(f"{url}: empty result")
         except (httpx.HTTPError, ValueError) as exc:
-            last_error = exc
-    raise RuntimeError(f"all Overpass servers failed for {kind}: {last_error!r}")
+            errors.append(f"{url}: {type(exc).__name__} {str(exc)[:80]}")
+    raise RuntimeError(f"all Overpass servers failed for {kind}: " + "; ".join(errors))
 
 
 def parse(data: dict[str, Any], kind: str) -> list[dict[str, Any]]:

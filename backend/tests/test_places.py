@@ -35,6 +35,7 @@ def test_parse_keeps_named_places_in_london():
 def test_query_covers_the_london_bbox():
     q = places.overpass_query("hotel")
     assert "51.2868,-0.5104,51.6919,0.334" in q and "out center tags" in q
+    assert q.count("51.2868,-0.5104,51.6919,0.334") == 6 and 'node["tourism"="hostel"]["name"]' in q
 
 
 @pytest.fixture
