@@ -6,14 +6,23 @@ All endpoints are public and need no key. `TFL_APP_KEY` is optional and raises t
 
 | Source | Id | Endpoint | Provides |
 | :--- | :--- | :--- | :--- |
-| TfL road disruptions | `tfl_road` | `https://api.tfl.gov.uk/Road/all/Disruption?stripContent=false` | Roadworks, closures, collisions, planned events; street segments as lines |
-| TfL station disruptions | `tfl_transit` | `https://api.tfl.gov.uk/StopPoint/Mode/tube,overground,dlr,elizabeth-line/Disruption` (coordinates: `https://api.tfl.gov.uk/StopPoint/{ids}`) | Station closures, part closures, exit-only, lift and escalator faults |
-| Environment Agency floods | `ea_floods` | `https://environment.data.gov.uk/flood-monitoring/id/floods?lat=51.5&long=-0.12&dist=30` (areas: `/id/floodAreas/{id}` and `/id/floodAreas/{id}/polygon`) | Flood warnings with area polygons |
+| TfL road incidents | `tfl_road` | `https://api.tfl.gov.uk/Road/all/Disruption?stripContent=false` | Incidents only: collisions, emergency-service incidents, hazards, weather flooding, and demonstrations/marches. Roadworks, asset faults, network delays, breakdowns and other planned events are dropped at ingestion; unknown categories are dropped. TfL's severity is ignored (it measures traffic delay); severity is set per incident type. `Road/Meta/Categories` describes a legacy vocabulary that the feed does not use; the real values are listed in the module |
+| TfL rail incidents | `tfl_transit` | `https://api.tfl.gov.uk/StopPoint/Mode/tube,overground,dlr,elizabeth-line/Disruption` and `https://api.tfl.gov.uk/Line/Mode/tube,overground,dlr,elizabeth-line/Status` (coordinates: `StopPoint/{ids}`, `Line/{id}/StopPoints`) | Real-time items whose text names an emergency cause only: casualty on the track, assault, fire or security alert, police incident, trespasser, evacuation, emergency-services incident, customer or medical incident. Closures, part closures, exit-only, lift/step-free and information notices and operational faults are dropped. Line-status incidents are added only when the named station resolves exactly to a stop on that line. The cause phrases are unverified against live data: no incident was in either feed when this was written |
+| Environment Agency floods | `ea_floods` | `https://environment.data.gov.uk/flood-monitoring/id/floods?lat=51.48935&long=-0.08820&dist=45` (centre and radius derived from the London bbox; areas: `/id/floodAreas/{id}` and `/id/floodAreas/{id}/polygon`) | Flood alerts, warnings and severe warnings with area polygons. Kept when the area polygon intersects the London bbox. Area lookups: 4 concurrent, 60 new areas per poll at most. The EA gateway blocks an IP (HTTP 403 on all endpoints) after a few hundred requests in a few minutes; an error status fails the poll and ends no events |
 | Met Police news | `met_news` | `https://news.met.police.uk/rss/current_news/66871` | Official incident statements and appeals (RSS, unstructured) |
 | BBC London news | `bbc_london` | `https://feeds.bbci.co.uk/news/england/london/rss.xml` | General London news (RSS, unstructured). Polled only when an LLM is configured (`LLM_MODEL`): the rule-based extractor gave mostly false positives on this feed |
 | Evening Standard London | `standard_london` | `https://www.standard.co.uk/news/london/rss` | London news (RSS, unstructured). Polled only when an LLM is configured |
 | MyLondon | `mylondon` | `https://www.mylondon.news/news/?service=rss` | London local news (RSS, unstructured). Polled only when an LLM is configured |
 | Met Police recorded crime | `police_uk` (one-off backfill) | `https://data.police.uk/api/crimes-street/all-crime?poly=&date=` (months: `https://data.police.uk/api/crimes-street-dates`) | Monthly street-level crime records; baseline layer and heatmap |
+
+## Official alerts (display only)
+
+These are not events: they are stored in the `alerts` table, never scored, never used for routing, and not listed in the agents panel. They are polled every 5 minutes by `poll_alerts`, spawned from the dispatcher. The client shows a small banner for alerts that cover London and are in force or start within 24 hours; amber and red by default (`/api/alerts?min_level=`).
+
+| Source | Id | Endpoint | Notes |
+| :--- | :--- | :--- | :--- |
+| Met Office weather warnings | `met_office` | `https://www.metoffice.gov.uk/public/data/PWSCache/WarningsRSS/Region/se` | London & South East region; kept when the area list contains "Greater London". Level and hazard come from the title; times are read as UTC (inferred, not documented). Terms: attribute the Met Office and link directly to the warning's page |
+| UK Emergency Alerts | `uk_emergency_alerts` | `https://www.gov.uk/alerts/feed.atom` | No levels: every alert is shown as red. In force while there is no stopped stamp; operator tests are dropped. London is matched on the alert's area text (England, UK, London, a borough). OGL |
 
 ## Geocoding (used by unstructured sources)
 

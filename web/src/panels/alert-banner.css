@@ -1,0 +1,75 @@
+/* Alert banner: top centre of the map area. The area is the part of the window
+   not covered by the sidebar (340px wide at left: 12px) or, when the sidebar is
+   collapsed, by the two view buttons in the top left corner. The area ignores
+   pointer input; only the banner itself takes clicks. */
+.alert-banner-area {
+  position: absolute;
+  top: 12px;
+  left: 250px;
+  right: 12px;
+  display: flex;
+  justify-content: center;
+  pointer-events: none;
+  z-index: 5;
+}
+.alert-banner-area.with-sidebar { left: 364px; }
+
+.alert-banner {
+  /* Level colours for text on the panel background. Contrast ratio against the
+     panel colour: dark theme (#10131a) amber 9.1, red 6.7, yellow 12.3; light
+     theme (white) amber 6.2, red 5.7, yellow 6.2. */
+  --alert-yellow: #e8d44d;
+  --alert-amber: #f5a524;
+  --alert-red: #ff6b6f;
+  pointer-events: auto;
+  width: 100%;
+  max-width: 560px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  backdrop-filter: blur(8px);
+  font-size: 12px;
+  overflow: hidden;
+}
+:root[data-theme='light'] .alert-banner {
+  --alert-yellow: #6f6100;
+  --alert-amber: #8f5200;
+  --alert-red: #c4262c;
+}
+.alert-banner ul { list-style: none; margin: 0; padding: 0; }
+.alert-banner li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 6px 5px 10px;
+  border-left: 3px solid var(--level);
+  white-space: nowrap;
+}
+.alert-banner li + li { border-top: 1px solid var(--border); }
+.alert-banner li.level-yellow { --level: var(--alert-yellow); }
+.alert-banner li.level-amber { --level: var(--alert-amber); }
+.alert-banner li.level-red { --level: var(--alert-red); }
+/* The level is written as text; the dot repeats it in colour */
+.alert-banner .level { color: var(--level); font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; font-size: 11px; }
+.alert-banner .level::before { content: ''; display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 5px; background: var(--level); }
+/* A long Emergency Alert headline takes at most two lines; the rest of the row stays on one */
+.alert-banner .summary { flex: 1; min-width: 0; overflow: hidden; white-space: normal; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; color: var(--text); font-weight: 600; }
+.alert-banner .when, .alert-banner .source { color: var(--muted); }
+.alert-banner .source::before { content: '· '; }
+.alert-banner a { color: var(--text); text-decoration: underline; text-underline-offset: 2px; }
+.alert-banner a:hover { color: var(--accent); }
+.alert-banner button { background: none; border: 0; color: var(--muted); cursor: pointer; font: inherit; }
+.alert-banner button:hover { color: var(--text); }
+.alert-banner .dismiss { font-size: 16px; line-height: 1; padding: 0 4px; }
+.alert-banner .more { display: block; width: 100%; padding: 4px 10px; border-top: 1px solid var(--border); text-align: left; }
+
+/* Narrow windows: the sidebar is at the bottom, so the banner uses the full
+   width; below the view buttons when the sidebar is collapsed. */
+@media (max-width: 800px) {
+  .alert-banner-area, .alert-banner-area.with-sidebar { left: 12px; }
+  .alert-banner-area:not(.with-sidebar) { top: 56px; }
+  .alert-banner li { flex-wrap: wrap; row-gap: 0; }
+  .alert-banner .summary { flex-basis: 60%; }
+  .alert-banner .source { flex: 1; }
+  .alert-banner .source::before { content: none; }
+}

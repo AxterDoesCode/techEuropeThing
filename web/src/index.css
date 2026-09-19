@@ -46,8 +46,20 @@ html, body, #root, .app { height: 100%; margin: 0; }
 
 .left { position: absolute; top: 12px; left: 12px; bottom: 12px; width: 340px; display: flex; flex-direction: column; gap: 12px; pointer-events: none; }
 .left > * { pointer-events: auto; }
-.left[hidden] { display: none; }
+.left { transition: transform 0.18s ease, visibility 0s; }
+/* The collapsed sidebar stays mounted and keeps its layout, so it can slide; visibility: hidden
+   removes it from the tab order, the accessibility tree and hit testing once the slide has ended */
+.left[hidden] { display: flex; visibility: hidden; transform: translateX(calc(-100% - 12px)); transition: transform 0.18s ease, visibility 0s 0.18s; }
 .collapsed-controls { position: absolute; top: 12px; left: 12px; flex-basis: auto; padding: 6px; }
+/* Toggle on the right edge of the sidebar (12px + 340px); at the window edge when collapsed.
+   Outside the aside because the aside clips its overflow. */
+.sidebar-tab { position: absolute; top: 50%; left: 352px; transform: translateY(-50%); width: 20px; height: 64px; padding: 0 0 2px; display: flex; align-items: center; justify-content: center; background: var(--bg); color: var(--text); border: 1px solid var(--border); border-left: 0; border-radius: 0 8px 8px 0; backdrop-filter: blur(8px); font-size: 20px; line-height: 1; cursor: pointer; transition: left 0.18s ease; }
+.sidebar-tab.collapsed { left: 0; }
+.sidebar-tab:hover { background-image: linear-gradient(var(--hover), var(--hover)); }
+.sidebar-tab:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+@media (prefers-reduced-motion: reduce) {
+  .left, .left[hidden], .sidebar-tab { transition: none; }
+}
 
 .coords .hover { display: flex; justify-content: space-between; margin-bottom: 8px; color: var(--muted); }
 .coords code { color: var(--text); font-size: 13px; }
@@ -131,6 +143,8 @@ html, body, #root, .app { height: 100%; margin: 0; }
 @media (max-width: 800px) {
   .left { width: calc(100% - 24px); }
   .left { top: auto; height: 45%; }
+  /* The sidebar covers the full width here: the toggle stays at the window edge, above the sidebar */
+  .sidebar-tab { left: 0; top: 40%; }
 }
 
 .stream-status { margin-left: auto; font-size: 11px; color: var(--muted); border: 1px solid var(--border); border-radius: 10px; padding: 1px 8px; }

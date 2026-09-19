@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss xmlns:dc="http://purl.org/dc/elements/1.1/" version="2.0">
+    <channel>
+        <title>Met Office warnings for London &amp; South East England</title>
+        <link>https://www.metoffice.gov.uk/weather/warnings-and-advice/uk-warnings</link>
+        <description>Weather warnings of severe and extreme weather from the Met Office</description>
+        <language>en-gb</language>
+        <copyright>(c) Crown copyright</copyright>
+        <pubDate>Tue, 11 Aug 2026 09:32:42 GMT</pubDate>
+        <dc:creator>webteam@metoffice.gov.uk</dc:creator>
+        <item>
+            <title>Amber warning of extreme heat affecting London &amp; South East England</title>
+            <link>https://www.metoffice.gov.uk/weather/warnings-and-advice/uk-warnings#?date=2026-08-13&amp;id=27b2ddcc-de43-4935-a544-9eb81e6e4cf8&amp;referrer=rss</link>
+            <description>Amber warning of extreme heat affecting London &amp; South East England: Bracknell Forest, Buckinghamshire, Greater London, Milton Keynes, Oxfordshire, Reading, Slough, Surrey, West Berkshire, Windsor and Maidenhead, Wokingham valid from 0800 Thu 13 Aug to 2259 Thu 13 Aug</description>
+            <guid isPermaLink="false">https://www.metoffice.gov.uk/weather/warnings-and-advice/uk-warnings#?date=2026-08-13&amp;id=27b2ddcc-de43-4935-a544-9eb81e6e4cf8&amp;referrer=rss&amp;region=London &amp; South East England</guid>
+            <enclosure length="16098" type="image/png" url="https://data.consumer-digital.api.metoffice.gov.uk/v1/warnings/rss/image/amber-extreme-heat.png"/>
+        </item>
+    </channel>
+</rss>

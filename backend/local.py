@@ -14,7 +14,7 @@ import os
 import threading
 import time
 
-from . import db, geocode
+from . import alerts, db, geocode
 from .db import SqliteRepo
 from .models import utcnow
 from .pipeline import SOURCES, is_pollable, run_poll, run_rescore
@@ -43,6 +43,8 @@ def tick(repo: SqliteRepo) -> None:
             print(source_id, run_poll(SOURCES[source_id], repo))
         except RuntimeError as exc:  # already recorded in agent_runs
             print(exc)
+    if repo.claim_alerts_poll(utcnow(), alerts.POLL_INTERVAL_S, list(alerts.SOURCES)):
+        print("alerts", alerts.poll(repo))
     print("cells written:", run_rescore(repo))
 
 
