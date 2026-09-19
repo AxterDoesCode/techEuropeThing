@@ -9,6 +9,8 @@ export interface PopupItem {
   key: string
   /** read when the popup is created; a popup does not move */
   at: LngLat
+  /** side of the popup that touches the position; chosen by MapLibre from the free space when absent */
+  anchor?: maplibregl.PositionAnchor
 }
 
 export interface PopupOptions {
@@ -86,7 +88,7 @@ function openPopup(map: maplibregl.Map, item: PopupItem, options: PopupOptions, 
   const node = document.createElement('div')
   const offsetNow = () => (typeof offset === 'function' ? offset(map, item.at) : offset)
   // closeOnClick is off: the click that opens a popup would also close it
-  const popup = new maplibregl.Popup({ offset: offsetNow(), maxWidth, closeOnClick: false, className, focusAfterOpen })
+  const popup = new maplibregl.Popup({ offset: offsetNow(), maxWidth, closeOnClick: false, className, focusAfterOpen, anchor: item.anchor })
     .setLngLat([item.at.lng, item.at.lat])
     .setDOMContent(node)
     .addTo(map)

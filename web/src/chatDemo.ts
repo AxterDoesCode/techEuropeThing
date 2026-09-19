@@ -3,7 +3,7 @@
 // assistant map layer can be shown and tested. The responses have the JSON shape of
 // POST /api/chat and pass through the same validation as a server response.
 import { fetchEvents } from './api'
-import { bboxAround, distanceM, distanceToLineM } from './geo'
+import { bboxAround, distanceM, closestOnLine } from './geo'
 import type { ChatMessage } from './chat'
 import type { EventFeature } from './types'
 
@@ -76,7 +76,7 @@ const byRisk = (a: EventFeature, b: EventFeature) => b.properties.risk - a.prope
 function demoRouteResponse(sample: EventFeature[]) {
   const spaced: EventFeature[] = []
   const events = sample
-    .map((e) => ({ e, rel: distanceToLineM(position(e), DEMO_SAFE_LINE) }))
+    .map((e) => ({ e, rel: closestOnLine(position(e), DEMO_SAFE_LINE) }))
     .sort((a, b) => a.rel.distance_m - b.rel.distance_m)
     .filter(({ e }) => {
       if (spaced.some((other) => distanceM(position(other), position(e)) < DEMO_MIN_SPACING_M)) return false

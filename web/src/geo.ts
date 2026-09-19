@@ -19,9 +19,9 @@ export function distanceM(a: Position, b: Position): number {
   return Math.hypot(x, y)
 }
 
-/** Distance from `p` to a polyline, and the length along the line at the closest position. */
-export function distanceToLineM(p: Position, line: Position[]): { distance_m: number; along_m: number } {
-  let best = { distance_m: Infinity, along_m: 0 }
+/** Closest position to `p` on a polyline, its distance from `p`, and the length along the line up to it. */
+export function closestOnLine(p: Position, line: Position[]): { distance_m: number; along_m: number; point: Position } {
+  let best = { distance_m: Infinity, along_m: 0, point: line[0] }
   let travelled = 0
   for (let i = 1; i < line.length; i++) {
     const a = line[i - 1]
@@ -30,7 +30,9 @@ export function distanceToLineM(p: Position, line: Position[]): { distance_m: nu
     const length = Math.hypot(bx, by)
     const t = length === 0 ? 0 : Math.min(1, Math.max(0, (px * bx + py * by) / (length * length)))
     const d = Math.hypot(px - t * bx, py - t * by)
-    if (d < best.distance_m) best = { distance_m: d, along_m: travelled + t * length }
+    if (d < best.distance_m) {
+      best = { distance_m: d, along_m: travelled + t * length, point: [a[0] + t * (line[i][0] - a[0]), a[1] + t * (line[i][1] - a[1])] }
+    }
     travelled += length
   }
   return best

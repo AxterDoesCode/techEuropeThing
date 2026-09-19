@@ -17,6 +17,7 @@ import type { AssistantLayer } from '../assistant'
 import type { AssistantEvent, ChatArea, MapContext } from '../chat'
 import { bboxAround, bboxOf, clampFitBounds } from '../geo'
 import { usePopup, usePopups, type PopupOptions } from './usePopups'
+import { cardAnchors } from './cardAnchors'
 
 const STYLE_URL: Record<Theme, string> = {
   dark: 'https://tiles.openfreemap.org/styles/dark',
@@ -447,9 +448,17 @@ export function RiskMap({
     const byId = new Map(assistantEvents.map((e) => [e.properties.id, e]))
     return assistant.cardIds.flatMap((id) => byId.get(id) ?? [])
   }, [assistantEvents, assistant.cardIds])
+  const cardAnchorById = useMemo(
+    () => cardAnchors({ route: assistantRoute, area: assistantArea, events: assistantEvents }),
+    [assistantRoute, assistantArea, assistantEvents],
+  )
   const cardItems = useMemo(
-    () => cardEvents.map((e) => ({ key: e.properties.id, at: { lng: e.properties.lng, lat: e.properties.lat } })),
-    [cardEvents],
+    () => cardEvents.map((e) => ({
+      key: e.properties.id,
+      at: { lng: e.properties.lng, lat: e.properties.lat },
+      anchor: cardAnchorById.get(e.properties.id),
+    })),
+    [cardEvents, cardAnchorById],
   )
   const cardPopupOptions = useMemo<PopupOptions>(
     () => ({ ...CARD_POPUP, onUserClose: (id) => handlers.current.onCloseCard(id) }),
