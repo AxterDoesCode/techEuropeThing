@@ -20,14 +20,14 @@ What the platform holds for a circle (radius 50–3000 m).
   "center": [-0.1365, 51.5136], "radius_m": 400, "generated_at": "2026-09-19T16:50:00+00:00",
   "risk": {"mean_score": 0.41, "max_score": 0.88, "mean_live": 0.03, "mean_baseline": 0.92,
            "london_percentile": 0.99, "cells": 5},
-  "crime": {"month": "2026-07", "recorded_crimes": 1840, "weighted": 905.2,
+  "crime": {"month": "2026-07", "period": "2025-09..2026-08", "method": "MPS recorded crime per LSOA, …", "recorded_crimes": 1840, "weighted": 905.2,
             "top_categories": {"other-theft": 420, "theft-from-the-person": 390},
             "top_streets": [{"street": "On or near Old Compton Street", "recorded_crimes": 113}]},
   "events": [ /* GeoJSON Features as in /api/events, plus properties.distance_m, highest risk first, max 25 */ ]
 }
 ```
 
-`london_percentile` = share of scored London cells with a lower score than this area's mean. `crime.top_categories` covers the three most frequent categories per street point, so it sums to slightly less than `recorded_crimes`. The crime data has no time of day.
+`london_percentile` = share of scored London cells with a lower score than this area's mean. `crime.top_categories` covers the three most frequent categories per street point, so it sums to slightly less than `recorded_crimes`. `crime.period` and `crime.method` say what the counts cover (both can be null); show the period next to any crime figure. The crime data has no time of day.
 
 ## GET /api/hotels?lat=&lng=&radius_m=1500&sort=safety|distance
 

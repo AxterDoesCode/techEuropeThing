@@ -58,7 +58,9 @@ def risk_summary(cells: list[str], scores: dict[str, dict[str, float]], all_scor
     }
 
 
-def crime_summary(rows: list[list[Any]], month: str | None, lng: float, lat: float, radius_m: float) -> dict[str, Any]:
+def crime_summary(
+    rows: list[list[Any]], meta: dict[str, Any], lng: float, lat: float, radius_m: float
+) -> dict[str, Any]:
     """`rows` are crime-point rows [lng, lat, count, weighted, street, top_categories]."""
     total = 0
     weighted = 0.0
@@ -72,7 +74,11 @@ def crime_summary(rows: list[list[Any]], month: str | None, lng: float, lat: flo
         categories.update(r[5])
         streets[r[4]] += r[2]
     return {
-        "month": month,
+        # `period` and `method` describe what the counts are; they come from the crime
+        # data set itself (absent for data loaded before they were introduced)
+        "month": meta.get("month"),
+        "period": meta.get("period"),
+        "method": meta.get("method"),
         "recorded_crimes": total,
         "weighted": round(weighted, 1),
         # Each street point stores its three most frequent categories, so this
