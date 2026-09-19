@@ -1,5 +1,4 @@
 import { CATEGORY_COLOR, CATEGORY_LABEL } from '../map/colors'
-import { monthLabel } from '../map/crimeIndex'
 import { sourceLabel, type SourceInfo } from '../eventFilter'
 import { MIN_RISK_MAX, type LayerSettings, type UpdateLayerSettings } from '../layerSettings'
 import type { CrimePoints } from '../types'
@@ -49,7 +48,7 @@ export function LayerPanel({ crime, settings, onChange, sources, totalEvents, sh
               Met Police recorded crime
               <div className="meta">
                 {crime
-                  ? `${monthLabel(crime.month)} · ${total.toLocaleString('en-GB')} street crimes at ${crime.rows.filter((r) => r[2] > 0).length.toLocaleString('en-GB')} street points`
+                  ? `${total.toLocaleString('en-GB')} street crimes at ${crime.rows.filter((r) => r[2] > 0).length.toLocaleString('en-GB')} street points`
                   : 'loading…'}
               </div>
             </span>

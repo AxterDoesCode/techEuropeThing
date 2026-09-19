@@ -679,7 +679,7 @@ export function RiskMap({
       <div ref={container} className="map" />
       {eventPopupNode && selected && createPortal(<EventDetail event={selected} />, eventPopupNode)}
       {crimePopupNode && crime && crimeAt && crimeSummary &&
-        createPortal(<CrimeDetail month={crime.month} pos={crimeAt} summary={crimeSummary} />, crimePopupNode)}
+        createPortal(<CrimeDetail pos={crimeAt} summary={crimeSummary} />, crimePopupNode)}
       {cardEvents.map((e) => {
         const node = cardNodes.get(e.properties.id)
         return node && createPortal(

@@ -124,7 +124,6 @@ create table if not exists geocode_cache (
 insert or ignore into sources (id, kind, poll_interval_s) values
   ('tfl_road', 'structured', 120),
   ('tfl_transit', 'structured', 300),
-  ('ea_floods', 'structured', 900),
   ('met_news', 'unstructured', 600),
   ('bbc_london', 'unstructured', 600),
   ('standard_london', 'unstructured', 600),

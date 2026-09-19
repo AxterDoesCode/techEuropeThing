@@ -138,3 +138,37 @@ def test_a_running_poll_is_not_due_again(repo):
     repo.start_run("tfl_road", utcnow())  # poll started, not finished
     assert "tfl_road" not in repo.due_sources(utcnow())
     assert "tfl_road" in repo.due_sources(utcnow() + timedelta(seconds=121))
+
+
+def test_retired_source_is_removed_from_a_deployed_database(tmp_path):
+    """A database file that still has the ea_floods source: its rows in sources,
+    raw_items and agent_runs are deleted on connect and its open events are ended."""
+    path = tmp_path / "risk.sqlite"
+    db.connect(path)
+    with db._tx() as conn:
+        conn.execute("insert into sources (id, kind, poll_interval_s) values ('ea_floods', 'structured', 900)")
+        conn.execute(
+            "insert into raw_items (source_id, external_id, fetched_at, payload, payload_hash) "
+            "values ('ea_floods', 'A1', '2026-09-19T17:00:00+00:00', '{}', 'h')"
+        )
+        conn.execute(
+            "insert into agent_runs (source_id, started_at) values ('ea_floods', '2026-09-19T17:00:00+00:00')"
+        )
+    repo = SqliteRepo()
+    # An event of the retired source, stored the way structured sources store theirs
+    ev = FixtureSource(FIXTURE).to_event(FixtureSource(FIXTURE).fetch({})[0][0])
+    ev = ev.model_copy(update={"external_ref": "ea_floods:A1", "source_ids": ["ea_floods"]})
+    repo.upsert_structured_events([ev])
+
+    db.connect(path)
+    db.connect(path)  # idempotent
+
+    with db._tx() as conn:
+        assert conn.execute("select count(*) from sources where id = 'ea_floods'").fetchone()[0] == 0
+        assert conn.execute("select count(*) from raw_items where source_id = 'ea_floods'").fetchone()[0] == 0
+        assert conn.execute("select count(*) from agent_runs where source_id = 'ea_floods'").fetchone()[0] == 0
+        row = conn.execute("select ended_at, is_ongoing from events where external_ref = 'ea_floods:A1'").fetchone()
+    assert row["ended_at"] is not None and row["is_ongoing"] == 0
+    assert "ea_floods" not in {a["id"] for a in db.agent_status()}
+    # the other sources are untouched
+    assert {"tfl_road", "met_news"} <= {a["id"] for a in db.agent_status()}

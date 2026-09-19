@@ -3,7 +3,6 @@ import type { Category, EventFeature } from './types'
 const SOURCE_LABEL: Record<string, string> = {
   tfl_road: 'TfL road disruptions',
   tfl_transit: 'TfL station disruptions',
-  ea_floods: 'Environment Agency floods',
   met_news: 'Met Police news',
   bbc_london: 'BBC London news',
   manual: 'Manual reports',
