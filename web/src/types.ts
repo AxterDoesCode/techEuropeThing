@@ -34,6 +34,11 @@ export interface EventProps {
 export type EventFeature = Feature<Geometry, EventProps>
 export type EventCollection = FeatureCollection<Geometry, EventProps>
 
+export interface LngLat {
+  lng: number
+  lat: number
+}
+
 export interface Cell {
   h3: string
   res: number
@@ -54,4 +59,13 @@ export interface AgentStatus {
   fetched_last_hour: number
   inserted_last_hour: number
   errors_last_hour: number
+}
+
+// [lng, lat, count, weighted, street, top categories]
+export type CrimeRow = [number, number, number, number, string, Record<string, number>]
+
+export interface CrimePoints {
+  month: string
+  columns: string[]
+  rows: CrimeRow[]
 }

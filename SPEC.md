@@ -22,7 +22,7 @@ Priority order:
 | Database | Hosted Postgres with PostGIS (Supabase or Neon). Must be reachable from Modal, so not SQLite and not `modal.Dict` |
 | Spatial key | H3. Events stored at resolution 10, scores aggregated at resolutions 9 (street level, ~175 m edge) and 7 (city level, ~1.2 km edge). H3 indexes computed in Python with `h3`, stored as `text`; no dependency on the `h3-pg` extension |
 | LLM | Provider-agnostic. Use `pydantic-ai`; model selected by env var, e.g. `LLM_MODEL=anthropic:claude-haiku-4-5`, `google-gla:gemini-2.5-flash`, `openai:gpt-...`. Output type is the Pydantic event model |
-| Globe | deck.gl 9.4 on MapLibre GL JS **5.x** with `projection: globe`, `MapboxOverlay({interleaved: true})`. Verified 2026-09-19: hexagons, pitch and extrusion render correctly on the globe. MapLibre 6 must not be used: it removed `map.transform`, which deck.gl 9.4 reads, and every frame throws. Keyless basemap: OpenFreeMap `dark` style |
+| Globe | deck.gl 9.4 on MapLibre GL JS **5.x** with `projection: globe`, `MapboxOverlay({interleaved: true})`. Verified 2026-09-19: hexagons, pitch and extrusion render correctly on the globe. MapLibre 6 must not be used: it removed `map.transform`, which deck.gl 9.4 reads, and every frame throws. Projection is `globe` below zoom 7 and `mercator` from zoom 7, switched in code: deck.gl's `HeatmapLayer` draws nothing under globe, and deck.gl rejects MapLibre's interpolated projection type. deck.gl `IconLayer` did not render in interleaved mode in testing; markers use `ScatterplotLayer`. Keyless basemaps: OpenFreeMap `dark` and `positron` (light mode) |
 | Backend | One backend: FastAPI in Python. No Express server |
 | Frontend | React + TypeScript + Vite |
 
@@ -40,7 +40,7 @@ Checked on 2026-09-19 from this machine.
 | Open-Meteo | `api.open-meteo.com/v1/forecast?...&current=` | 200, no key | 15 min | No | Wind gusts, heavy rain as a city-wide modifier |
 | BBC London RSS | `feeds.bbci.co.uk/news/england/london/rss.xml` | 200 | Minutes to hours | Yes | Unstructured incident reports; requires extraction + geocoding |
 | GDELT doc API | `api.gdeltproject.org/api/v2/doc/doc?...` | 429 when called back to back; limit is 1 request per 5 s | 15 min | Yes | Wider news coverage. Poll at most once per minute |
-| Met Police news | `news.met.police.uk/rss/latest_news` returned 404 | Find the current feed URL on the Mynewsdesk newsroom page | Hours | Yes | Official incident statements |
+| Met Police news | `news.met.police.uk/rss/current_news/66871` (advertised in the newsroom page's `<link rel=alternate>`) | 200 | Hours; ~20 items, a few per day | Yes (rule-based fallback implemented) | Official incident statements and appeals. Most items are court outcomes and are rejected by the pre-filter |
 
 Not yet checked, worth adding if time allows: London Fire Brigade incident data (London Datastore), TfL JamCam locations (CCTV coverage proxy), OSM `lit=yes/no` tags (street lighting, from the same OSM extract used for routing), additional local RSS (Evening Standard, MyLondon).
 
@@ -75,8 +75,8 @@ A single dispatcher cron is used instead of one cron per source because Modal's 
 
 ### Agent types
 
-1. **Structured pollers** — TfL, EA floods, LondonAir, Open-Meteo, police.uk. Deterministic field mapping. No LLM.
-2. **Extraction agents** — RSS, GDELT, manual inject. A tool-using LLM agent (`pydantic-ai`) with output type `list[ExtractedEvent]`; one article can describe zero, one or several incidents.
+1. **Structured pollers** — TfL road (`tfl_road`), TfL station disruptions (`tfl_transit`), EA floods (`ea_floods`), LondonAir (`london_air`), police.uk (one-off `backfill_police`). Deterministic field mapping. No LLM. Open-Meteo is not built. A snapshot source ends events that leave its feed; an empty fetch ends nothing unless the source sets `empty_is_valid` (floods: no warnings is the normal state). LondonAir event ids include the bulletin hour, so each hourly reading is its own decaying event.
+2. **Extraction agents** — RSS, GDELT, manual inject. Implemented so far: `met_news` with the code pre-filter, the geocoder, and a rule-based extractor (`extract_rules.py`: keyword category/severity, place from headline patterns, one incident per item) that is used while no LLM is configured. Met statements are published hours after the incident, so `met_news` events use a 24 h half-life instead of the category default. A tool-using LLM agent (`pydantic-ai`) with output type `list[ExtractedEvent]`; one article can describe zero, one or several incidents.
 
 ### Extraction agent
 
@@ -244,15 +244,18 @@ One response shape per endpoint, generated from the Pydantic models. Coordinates
 
 ## 9. Frontend
 
-- Initial view: whole globe, then an animated camera move to London (pitch ~50°).
-- Layers (deck.gl):
-  - `H3HexagonLayer` — res 7 when zoom < 11, res 9 otherwise. Colour and extrusion height from `score`. Transition on update.
-  - `ScatterplotLayer` / `IconLayer` — active events by category; radius pulse for events newer than 10 minutes.
-  - `GeoJsonLayer` — flood polygons, road closure geometry.
+- Initial view: whole globe, then an animated camera move to London (pitch 50°). Light/dark toggle (persisted in localStorage, defaults to the system preference) switches UI colours and the basemap style.
+- Layers (deck.gl, interleaved with MapLibre):
+  - `HeatmapLayer` — Met Police recorded crime (police.uk, latest month), weighted by category relevance to personal safety. Toggle in the Layers panel.
+  - `GeoJsonLayer` — event geometry: affected road segments as lines (TfL `streets[].segments[].lineString`), flood areas as polygons. Colour = current risk, line width = severity.
+  - `ScatterplotLayer` (metres) — affected radius for events that only have a point.
+  - `ScatterplotLayer` (pixels) — one clickable marker per event, coloured by category, drawn without depth testing so buildings do not hide it.
+  - MapLibre `fill-extrusion` buildings from the vector basemap.
   - `PathLayer` — routes (phase 2).
-  - MapLibre `fill-extrusion` buildings from the vector basemap for the 3D city appearance.
-- Panels: event feed (newest first, click to fly to), event detail (sources, links, risk-over-time sparkline from the decay formula), agent fleet panel (from `/api/agents`), category and time-window filters, a time slider that replays the last 24 h by recomputing `r_i(t)` client-side.
-- Removed from the Gemini spec: Python source viewer modal, Google Maps key modal, Express server, fixed "96% / 38%" labels.
+- The H3 cell scores are still computed server-side (`cell_scores`, used by routing) but are no longer drawn. `/api/cells` remains available.
+- Clicking a marker or line opens a MapLibre popup at the event (details, sources, links); `closeOnClick` is disabled because the selecting click would also close it. Clicking empty map closes the popup and copies the clicked position into the coordinate fields.
+- Panels: position (cursor longitude/latitude on hover, editable fields + Go to move the map), layers (crime toggle, colour scale), event feed (sorted by risk, click flies to the event and opens its popup), agent fleet (hidden until `/api/agents` has data).
+- Not built yet: SSE, time slider, category filters.
 
 ## 10. Phase 2: routing
 

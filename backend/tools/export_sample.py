@@ -15,6 +15,7 @@ from ..api import _feature
 from ..models import utcnow
 from ..pipeline import SOURCES
 from ..scoring import compute_cell_scores
+from ..sources import police_uk
 
 
 def main(out_dir: str) -> None:
@@ -37,6 +38,13 @@ def main(out_dir: str) -> None:
         cells = [c.model_dump(mode="json") for c in scores if c.res == res]
         (out / f"cells_{res}.json").write_text(json.dumps(cells))
     print(f"{len(events)} events, {len(scores)} cells -> {out}")
+
+    month, crimes = police_uk.fetch_month()
+    points = police_uk.aggregate_points(crimes)
+    (out / "crime_points.json").write_text(
+        json.dumps(police_uk.points_payload(points, month), separators=(",", ":"))
+    )
+    print(f"{month}: {len(crimes)} crimes at {len(points)} street points")
 
 
 if __name__ == "__main__":

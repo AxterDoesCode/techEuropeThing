@@ -68,3 +68,12 @@ def get_cells(
 @web.get("/api/agents")
 def get_agents() -> list[dict[str, Any]]:
     return db.agent_status()
+
+
+@web.get("/api/crime-points")
+def get_crime_points() -> dict[str, Any]:
+    """Latest month of Metropolitan Police street-level crime, one row per street point."""
+    payload = db.latest_crime_points()
+    if payload is None:
+        raise HTTPException(404, "no crime data loaded; run backfill_police")
+    return payload

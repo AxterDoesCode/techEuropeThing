@@ -3,6 +3,7 @@
   modal run -m backend.app::init_db                       apply schema
   modal run -m backend.app::poll_source --source-id tfl_road
   modal run -m backend.app::rescore
+  modal run -m backend.app::backfill_police                latest month of Met crime data
   modal serve -m backend.app                              API with live reload
   modal deploy -m backend.app                             API + crons
 """
@@ -47,6 +48,22 @@ def dispatcher() -> None:
     for source_id in PgRepo().due_sources(utcnow()):
         if source_id in SOURCES:
             poll_source.spawn(source_id)
+
+
+@app.function(timeout=900)
+def backfill_police(month: str = "") -> dict[str, int]:
+    """Load one month of police.uk data (default: latest) as the baseline layer."""
+    from . import db
+    from .scoring import FINE_RES
+    from .sources import police_uk
+
+    resolved, crimes = police_uk.fetch_month(month or None)
+    points = police_uk.aggregate_points(crimes)
+    db.replace_baseline(police_uk.baseline_cells(points, months=1, res=FINE_RES), FINE_RES)
+    db.save_crime_points(resolved, police_uk.points_payload(points, resolved))
+    counts = {"crimes": len(crimes), "points": len(points)}
+    print(resolved, counts)
+    return counts
 
 
 @app.function(schedule=modal.Cron("* * * * *"), timeout=120)

@@ -1,0 +1,142 @@
+{
+  "real": [
+    {
+      "site_code": "BG1",
+      "site_name": "Barking and Dagenham - Rush Green",
+      "lat": 51.563752,
+      "lon": 0.177891,
+      "bulletin_date": "2026-09-19 12:00:00",
+      "max_index": 0,
+      "max_species": "NO2",
+      "band": "No data",
+      "species": {
+        "NO2": 0,
+        "SO2": 0
+      }
+    },
+    {
+      "site_code": "CR7",
+      "site_name": "Croydon - Purley Way A23",
+      "lat": 51.3622305655403,
+      "lon": -0.117604507351392,
+      "bulletin_date": "2026-09-19 12:00:00",
+      "max_index": 1,
+      "max_species": "NO2",
+      "band": "Low",
+      "species": {
+        "NO2": 1
+      }
+    },
+    {
+      "site_code": "BQ7",
+      "site_name": "Bexley - Belvedere West",
+      "lat": 51.4946486813055,
+      "lon": 0.137279111232178,
+      "bulletin_date": "2026-09-19 12:00:00",
+      "max_index": 2,
+      "max_species": "O3",
+      "band": "Low",
+      "species": {
+        "NO2": 0,
+        "O3": 2,
+        "PM10": 1,
+        "PM25": 1
+      }
+    },
+    {
+      "site_code": "BT4",
+      "site_name": "Brent - Ikea",
+      "lat": 51.552476,
+      "lon": -0.258089,
+      "bulletin_date": "2026-09-19 12:00:00",
+      "max_index": 2,
+      "max_species": "PM10",
+      "band": "Low",
+      "species": {
+        "NO2": 1,
+        "O3": 0,
+        "PM10": 2,
+        "PM25": 1
+      }
+    },
+    {
+      "site_code": "BT5",
+      "site_name": "Brent - Neasden Lane",
+      "lat": 51.552656,
+      "lon": -0.248774,
+      "bulletin_date": "2026-09-19 12:00:00",
+      "max_index": 2,
+      "max_species": "PM10",
+      "band": "Low",
+      "species": {
+        "NO2": 1,
+        "PM10": 2,
+        "PM25": 1
+      }
+    },
+    {
+      "site_code": "BX2",
+      "site_name": "Bexley - Belvedere",
+      "lat": 51.4906102082147,
+      "lon": 0.158914493927518,
+      "bulletin_date": "2026-09-19 12:00:00",
+      "max_index": 1,
+      "max_species": "NO2",
+      "band": "Low",
+      "species": {
+        "NO2": 1,
+        "PM10": 1,
+        "PM25": 1
+      }
+    }
+  ],
+  "synthetic": [
+    {
+      "site_code": "BQ7",
+      "site_name": "Bexley - Belvedere West",
+      "lat": 51.4946486813055,
+      "lon": 0.137279111232178,
+      "bulletin_date": "2026-09-19 12:00:00",
+      "max_index": 5,
+      "max_species": "O3",
+      "band": "Moderate",
+      "species": {
+        "NO2": 0,
+        "O3": 5,
+        "PM10": 1,
+        "PM25": 1
+      }
+    },
+    {
+      "site_code": "BT4",
+      "site_name": "Brent - Ikea",
+      "lat": 51.552476,
+      "lon": -0.258089,
+      "bulletin_date": "2026-09-19 12:00:00",
+      "max_index": 8,
+      "max_species": "PM10",
+      "band": "High",
+      "species": {
+        "NO2": 1,
+        "O3": 0,
+        "PM10": 8,
+        "PM25": 1
+      }
+    },
+    {
+      "site_code": "BT5",
+      "site_name": "Brent - Neasden Lane",
+      "lat": 51.552656,
+      "lon": -0.248774,
+      "bulletin_date": "2026-09-19 12:00:00",
+      "max_index": 10,
+      "max_species": "PM10",
+      "band": "Very High",
+      "species": {
+        "NO2": 1,
+        "PM10": 10,
+        "PM25": 1
+      }
+    }
+  ]
+}

@@ -335,3 +335,31 @@ def agent_status() -> list[dict[str, Any]]:
             order by s.id
             """
         ).fetchall()
+
+
+def replace_baseline(cells: dict[str, float], res: int) -> None:
+    with pool().connection() as conn, conn.cursor() as cur:
+        cur.execute("delete from baseline_cells where res = %s", [res])
+        cur.executemany(
+            "insert into baseline_cells (h3, res, crime_rate) values (%s, %s, %s)",
+            [(cell, res, rate) for cell, rate in cells.items()],
+        )
+
+
+def save_crime_points(month: str, payload: dict[str, Any]) -> None:
+    with pool().connection() as conn:
+        conn.execute(
+            """
+            insert into crime_points (month, payload) values (%s, %s)
+            on conflict (month) do update set payload = excluded.payload, created_at = now()
+            """,
+            [month, Jsonb(payload)],
+        )
+
+
+def latest_crime_points() -> dict[str, Any] | None:
+    with pool().connection() as conn:
+        row = conn.execute(
+            "select payload from crime_points order by month desc limit 1"
+        ).fetchone()
+    return row["payload"] if row else None

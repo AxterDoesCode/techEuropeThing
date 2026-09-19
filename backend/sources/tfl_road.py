@@ -60,10 +60,13 @@ class TflRoadSource:
         if not in_london(lng, lat):
             return None
 
+        # Most specific geometry available: affected street segments, then the
+        # works-area polygon, then the single point.
         geometry: dict[str, Any] = {"type": "Point", "coordinates": [lng, lat]}
-        if g := d.get("geometry"):
-            if shape(g).is_valid:
-                geometry = {"type": g["type"], "coordinates": g["coordinates"]}
+        if lines := _street_lines(d):
+            geometry = {"type": "MultiLineString", "coordinates": lines}
+        elif (g := d.get("geometry")) and shape(g).is_valid:
+            geometry = {"type": g["type"], "coordinates": g["coordinates"]}
 
         category = SUBCATEGORY_TO_CATEGORY.get(d.get("subCategory", ""), Category.ROAD_CLOSURE)
         confidence = SOURCE_TYPE_CONFIDENCE["official_feed"]
@@ -86,6 +89,16 @@ class TflRoadSource:
             source_ids=[self.id],
             urls=[f"https://api.tfl.gov.uk{d['url']}"] if d.get("url") else [],
         )
+
+
+def _street_lines(d: dict[str, Any]) -> list[list[list[float]]]:
+    lines = []
+    for street in d.get("streets") or []:
+        for seg in street.get("segments") or []:
+            coords = json.loads(seg.get("lineString") or "[]")
+            if len(coords) >= 2:
+                lines.append(coords)
+    return lines
 
 
 def _parse_dt(value: str | None) -> datetime | None:

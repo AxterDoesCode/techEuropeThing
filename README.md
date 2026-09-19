@@ -15,6 +15,7 @@ Requires a Modal secret named `london-risk` with `DATABASE_URL` (Postgres with P
 modal run -m backend.app::init_db                          # apply backend/sql/schema.sql
 modal run -m backend.app::poll_source --source-id tfl_road # one poll
 modal run -m backend.app::rescore                          # recompute cell_scores
+modal run -m backend.app::backfill_police                  # latest month of Met Police crime data
 modal serve -m backend.app                                 # API with live reload
 modal deploy -m backend.app                                # API + dispatcher and rescore crons
 ```
@@ -25,7 +26,7 @@ modal deploy -m backend.app                                # API + dispatcher an
 cd web && npm install && npm run dev
 ```
 
-Without `VITE_API_BASE` the client reads `web/public/sample/*.json`. Refresh those files from the live TfL feed (no database needed):
+Without `VITE_API_BASE` the client reads `web/public/sample/*.json`. Refresh those files from the live feeds (TfL road and station disruptions, EA floods, LondonAir, Met Police news, police.uk crime; takes about a minute, no database needed):
 
 ```bash
 .venv/bin/python -m backend.tools.export_sample web/public/sample

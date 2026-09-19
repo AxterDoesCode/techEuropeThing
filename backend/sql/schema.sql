@@ -60,6 +60,13 @@ create table if not exists baseline_cells (
   lit_fraction real
 );
 
+-- One document per published month of police.uk data, in the compact client format
+create table if not exists crime_points (
+  month text primary key,
+  payload jsonb not null,
+  created_at timestamptz not null default now()
+);
+
 create table if not exists cell_scores (
   h3 text not null,
   res smallint not null,
@@ -95,5 +102,9 @@ create table if not exists geocode_cache (
 );
 
 insert into sources (id, kind, poll_interval_s) values
-  ('tfl_road', 'structured', 120)
+  ('tfl_road', 'structured', 120),
+  ('tfl_transit', 'structured', 300),
+  ('ea_floods', 'structured', 900),
+  ('london_air', 'structured', 900),
+  ('met_news', 'unstructured', 600)
 on conflict (id) do nothing;

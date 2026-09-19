@@ -9,9 +9,22 @@ from typing import Any, Iterable, Protocol
 from .models import CellScore, Event, RawItem, utcnow
 from .scoring import FINE_RES, compute_cell_scores
 from .sources.base import StructuredSource
+from .sources.ea_floods import EaFloodsSource
+from .sources.london_air import LondonAirSource
+from .sources.met_news import MetNewsSource
 from .sources.tfl_road import TflRoadSource
+from .sources.tfl_transit import TflTransitSource
 
-SOURCES: dict[str, StructuredSource] = {s.id: s for s in [TflRoadSource()]}
+SOURCES: dict[str, StructuredSource] = {
+    s.id: s
+    for s in [
+        TflRoadSource(),
+        TflTransitSource(),
+        EaFloodsSource(),
+        LondonAirSource(),
+        MetNewsSource(),
+    ]
+}
 
 
 class Repo(Protocol):
@@ -55,9 +68,10 @@ def run_poll(source: StructuredSource, repo: Repo) -> dict[str, int]:
             if repo.upsert_structured_event(ev):
                 counts["inserted"] += 1
 
-        # An empty result from a snapshot feed is treated as an upstream fault,
-        # not as every event having ended.
-        if source.snapshot and items:
+        # An empty result from a snapshot feed is treated as an upstream fault, not
+        # as every event having ended, unless the source declares that an empty
+        # feed is a normal state (e.g. no flood warnings in force).
+        if source.snapshot and (items or getattr(source, "empty_is_valid", False)):
             counts["ended"] = repo.end_missing(source.id, seen_refs, utcnow())
     except Exception:
         error = traceback.format_exc(limit=3)

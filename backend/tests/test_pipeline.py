@@ -76,7 +76,7 @@ def test_to_event_maps_fields():
     }
     serious = events["TIMS-206772"]
     assert serious.severity == 0.55
-    assert serious.geometry["type"] == "MultiPolygon"
+    assert serious.geometry["type"] == "MultiLineString"
     assert serious.external_ref == "tfl_road:TIMS-206772"
     assert serious.half_life_min is None
     assert serious.occurred_at.tzinfo is not None
@@ -110,6 +110,15 @@ def test_empty_fetch_does_not_end_events():
     run_poll(FixtureSource(FIXTURE), repo)
     assert run_poll(FixtureSource([]), repo)["ended"] == 0
     assert all(e.ended_at is None for e in repo.events.values())
+
+
+def test_empty_fetch_ends_events_when_source_allows_it():
+    class EmptyIsValid(FixtureSource):
+        empty_is_valid = True
+
+    repo = MemoryRepo()
+    run_poll(EmptyIsValid(FIXTURE), repo)
+    assert run_poll(EmptyIsValid([]), repo)["ended"] == len(repo.events)
 
 
 def test_failed_poll_is_recorded_and_raised():

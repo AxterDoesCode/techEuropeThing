@@ -1,0 +1,115 @@
+[
+  {
+    "$type": "Tfl.Api.Presentation.Entities.DisruptedPoint, Tfl.Api.Presentation.Entities",
+    "atcoCode": "940GZZLUBSC",
+    "fromDate": "2026-09-19T00:00:00Z",
+    "toDate": "2026-09-20T00:29:00Z",
+    "description": "Barons Court: Closed - This station is closed due to planned engineering works.",
+    "commonName": "Barons Court Underground Station",
+    "type": "Closure",
+    "mode": "tube",
+    "stationAtcoCode": "940GZZLUBSC",
+    "appearance": "RealTime",
+    "lat": 51.490311,
+    "lon": -0.213427
+  },
+  {
+    "$type": "Tfl.Api.Presentation.Entities.DisruptedPoint, Tfl.Api.Presentation.Entities",
+    "atcoCode": "940GZZLUBSC",
+    "fromDate": "2026-07-06T03:30:00Z",
+    "toDate": "2026-11-30T01:29:00Z",
+    "description": "BARONS COURT STATION: From Monday 6 July until November, westbound trains will not call at Barons Court. If travelling westbound from the station, please use eastbound District or Piccadilly line trains and change to westbound services at West Kensington (on the District line) or Earls Court (on the Piccadilly line) and change to westbound services. If travelling westbound to the station, please continue to Hammersmith and change for eastbound District or Piccadilly line trains.",
+    "commonName": "Barons Court Underground Station",
+    "type": "Part Closure",
+    "mode": "tube",
+    "stationAtcoCode": "940GZZLUBSC",
+    "appearance": "PlannedWork",
+    "concernedLines": [
+      {
+        "$type": "Tfl.Api.Presentation.Entities.ConcernedLine, Tfl.Api.Presentation.Entities",
+        "id": "circle",
+        "direction": "inbound"
+      },
+      {
+        "$type": "Tfl.Api.Presentation.Entities.ConcernedLine, Tfl.Api.Presentation.Entities",
+        "id": "district",
+        "direction": "inbound"
+      },
+      {
+        "$type": "Tfl.Api.Presentation.Entities.ConcernedLine, Tfl.Api.Presentation.Entities",
+        "id": "piccadilly",
+        "direction": "inbound"
+      }
+    ],
+    "lat": 51.490311,
+    "lon": -0.213427
+  },
+  {
+    "$type": "Tfl.Api.Presentation.Entities.DisruptedPoint, Tfl.Api.Presentation.Entities",
+    "atcoCode": "940GZZLUHWY",
+    "fromDate": "2026-09-19T15:15:00Z",
+    "toDate": "2026-09-19T16:30:00Z",
+    "description": "HOLLOWAY ROAD STATION: Saturday 19 September, between 1615 and 1730, eastbound trains do not stop at the station due to a football match at Emirates Stadium. The station will operate as exit only at these times.",
+    "commonName": "Holloway Road Underground Station",
+    "type": "Exit Only",
+    "mode": "tube",
+    "stationAtcoCode": "940GZZLUHWY",
+    "appearance": "PlannedWork",
+    "lat": 51.552697,
+    "lon": -0.113244
+  },
+  {
+    "$type": "Tfl.Api.Presentation.Entities.DisruptedPoint, Tfl.Api.Presentation.Entities",
+    "atcoCode": "940GZZLUOXC",
+    "fromDate": "2026-07-02T02:07:00Z",
+    "toDate": "2026-09-22T00:29:00Z",
+    "description": "Oxford Circus Station: reduced escalator service - there is no up escalator in service from the Central line due to a fault.",
+    "commonName": "Oxford Circus Underground Station",
+    "type": "Interchange Message",
+    "mode": "tube",
+    "stationAtcoCode": "940GZZLUOXC",
+    "appearance": "RealTime",
+    "lat": 51.515224,
+    "lon": -0.141903
+  },
+  {
+    "$type": "Tfl.Api.Presentation.Entities.DisruptedPoint, Tfl.Api.Presentation.Entities",
+    "atcoCode": "940GZZLUWLO",
+    "fromDate": "2026-09-08T12:01:00Z",
+    "toDate": "2029-09-09T00:29:00Z",
+    "description": "WATERLOO STATION: Although step-free access is available to/from the Bakerloo line southbound platform, the curved platform has large gaps between train and platform, has no manual boarding ramps, and is unsuitable for wheelchair users and those with pushchairs.",
+    "commonName": "Waterloo Underground Station",
+    "type": "Information",
+    "mode": "tube",
+    "stationAtcoCode": "940GZZLUWLO",
+    "appearance": "Information",
+    "lat": 51.503299,
+    "lon": -0.11478
+  },
+  {
+    "$type": "Tfl.Api.Presentation.Entities.DisruptedPoint, Tfl.Api.Presentation.Entities",
+    "atcoCode": "910GCHESHNT",
+    "fromDate": "2026-09-19T03:30:00Z",
+    "toDate": "2026-09-21T00:29:00Z",
+    "description": "WEAVER LINE: Saturday 19 and Sunday 20 September, no service between Hackney Downs and Cheshunt / Enfield Town. Use London Underground connections between Central London and Seven Sisters, and Clapton for Rectory Road. Replacement buses operate. The limited number of GREATER ANGLIA and STANSTED EXPRESS trains which usually serve Seven Sisters stop at Tottenham Hale instead.",
+    "commonName": "Cheshunt Rail Station",
+    "type": "Part Closure",
+    "mode": "overground",
+    "stationAtcoCode": "910GCHESHNT",
+    "appearance": "PlannedWork",
+    "additionalInformation": "Replacement buses operate:Service L1: Seven Sisters - Bruce Grove - White Hart Lane (subject to change after Tottenham match on Saturday) - Silver Street - Edmonton Green - Bush Hill Park (Great Cambridge Road) - Enfield Town;Service L2: Seven Sisters - Bruce Grove - White Hart Lane (subject to change after Tottenham match on Saturday) - Silver Street - Edmonton Green - Bush Hill Park (Great Cambridge Road) -Southbury - Turkey Street (Hertford Road) - Theobalds Grove - Cheshunt;\u00a0",
+    "lat": 51.702876,
+    "lon": -0.02396
+  },
+  {
+    "atcoCode": "TEST-NO-COORDS",
+    "stationAtcoCode": "TEST-NO-COORDS",
+    "fromDate": "2026-09-19T00:00:00Z",
+    "toDate": "2026-09-20T00:29:00Z",
+    "description": "Synthetic item: stop id that could not be resolved to coordinates.",
+    "commonName": "Unresolved Test Station",
+    "type": "Closure",
+    "mode": "tube",
+    "appearance": "RealTime"
+  }
+]

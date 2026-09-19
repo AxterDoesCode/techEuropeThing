@@ -1,38 +1,62 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import * as maplibregl from 'maplibre-gl'
 import 'maplibre-gl/dist/maplibre-gl.css'
 import { MapboxOverlay } from '@deck.gl/mapbox'
-import { H3HexagonLayer } from '@deck.gl/geo-layers'
+import { HeatmapLayer } from '@deck.gl/aggregation-layers'
 import { GeoJsonLayer, ScatterplotLayer } from '@deck.gl/layers'
 import type { PickingInfo } from '@deck.gl/core'
-import type { Cell, EventFeature } from '../types'
+import type { CrimeRow, EventFeature, LngLat } from '../types'
+import type { Theme } from '../theme'
 import { CATEGORY_COLOR, scoreColor } from './colors'
+import { EventDetail } from '../panels/EventDetail'
 
-const STYLE_URL = 'https://tiles.openfreemap.org/styles/dark'
+const STYLE_URL: Record<Theme, string> = {
+  dark: 'https://tiles.openfreemap.org/styles/dark',
+  light: 'https://tiles.openfreemap.org/styles/positron',
+}
+const BUILDING_COLOR: Record<Theme, string> = { dark: '#2a2f3a', light: '#d9dce3' }
 const LONDON: [number, number] = [-0.1, 51.505]
-// Below this zoom the coarse (res 7) cells are shown
-const FINE_ZOOM = 11
-const MAX_EXTRUSION_M = 1500
+// Globe when zoomed out, mercator from this zoom up. deck.gl's HeatmapLayer does
+// not render under the globe projection, and deck.gl accepts only the plain
+// 'globe' and 'mercator' projection types (not MapLibre's interpolated form).
+const MERCATOR_FROM_ZOOM = 7
+const projectionFor = (zoom: number) => (zoom < MERCATOR_FROM_ZOOM ? 'globe' : 'mercator')
+
+// Same ramp as scoreColor: blue, teal, yellow, orange, red
+const HEATMAP_COLORS: [number, number, number][] = [
+  [70, 130, 200],
+  [90, 190, 180],
+  [240, 200, 80],
+  [240, 120, 50],
+  [210, 30, 40],
+]
 
 interface Props {
-  cellsFine: Cell[]
-  cellsCoarse: Cell[]
   events: EventFeature[]
+  crimeRows: CrimeRow[]
   selectedId: string | null
-  flyTo: { lng: number; lat: number; nonce: number } | null
+  target: (LngLat & { zoom?: number; nonce: number }) | null
   onSelect: (id: string | null) => void
+  onHover: (pos: LngLat | null) => void
+  onMapClick: (pos: LngLat) => void
+  theme: Theme
 }
 
-export function RiskMap({ cellsFine, cellsCoarse, events, selectedId, flyTo, onSelect }: Props) {
+export function RiskMap({ events, crimeRows, selectedId, target, onSelect, onHover, onMapClick, theme }: Props) {
   const container = useRef<HTMLDivElement>(null)
   const mapRef = useRef<maplibregl.Map | null>(null)
   const overlayRef = useRef<MapboxOverlay | null>(null)
-  const [zoom, setZoom] = useState(1.5)
+  const [popupNode, setPopupNode] = useState<HTMLDivElement | null>(null)
+  const [projection, setProjection] = useState(projectionFor(1.5))
+  const handlers = useRef({ onSelect, onHover, onMapClick })
+  handlers.current = { onSelect, onHover, onMapClick }
+  const themeRef = useRef(theme)
 
   useEffect(() => {
     const map = new maplibregl.Map({
       container: container.current!,
-      style: STYLE_URL,
+      style: STYLE_URL[themeRef.current],
       center: [10, 35],
       zoom: 1.5,
       maxPitch: 75,
@@ -42,97 +66,177 @@ export function RiskMap({ cellsFine, cellsCoarse, events, selectedId, flyTo, onS
     map.addControl(overlay)
     map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), 'bottom-right')
     map.on('style.load', () => {
-      map.setProjection({ type: 'globe' })
-      add3dBuildings(map)
+      map.setProjection({ type: projectionFor(map.getZoom()) })
+      add3dBuildings(map, themeRef.current)
     })
-    map.on('zoom', () => setZoom(map.getZoom()))
+    map.on('zoom', () => {
+      const wanted = projectionFor(map.getZoom())
+      if (map.getProjection()?.type !== wanted) {
+        map.setProjection({ type: wanted })
+        setProjection(wanted)
+      }
+    })
     map.on('moveend', () => map.triggerRepaint())
+
+    let frame = 0
+    map.on('mousemove', (e) => {
+      cancelAnimationFrame(frame)
+      frame = requestAnimationFrame(() => handlers.current.onHover({ lng: e.lngLat.lng, lat: e.lngLat.lat }))
+    })
+    map.on('mouseout', () => {
+      cancelAnimationFrame(frame)
+      handlers.current.onHover(null)
+    })
     map.once('load', () => {
       map.flyTo({ center: LONDON, zoom: 11.5, pitch: 50, bearing: -15, duration: 6000, essential: true })
     })
     mapRef.current = map
-    // Console access for debugging: open the app with ?debug
-    if (location.search.includes('debug')) (window as unknown as { __map: unknown }).__map = map
     overlayRef.current = overlay
+    // Console access for debugging: open the app with ?debug
+    if (location.search.includes('debug')) {
+      Object.assign(window, { __map: map, __overlay: overlay })
+    }
     return () => {
+      cancelAnimationFrame(frame)
       map.remove()
       mapRef.current = null
       overlayRef.current = null
     }
   }, [])
 
+  // setStyle fires 'style.load' again, which restores the projection and buildings
   useEffect(() => {
-    if (flyTo) mapRef.current?.flyTo({ center: [flyTo.lng, flyTo.lat], zoom: 15, pitch: 55, duration: 2000 })
-  }, [flyTo])
+    if (themeRef.current === theme) return
+    themeRef.current = theme
+    mapRef.current?.setStyle(STYLE_URL[theme])
+  }, [theme])
 
-  const showFine = zoom >= FINE_ZOOM
+  useEffect(() => {
+    if (target) {
+      mapRef.current?.flyTo({ center: [target.lng, target.lat], zoom: target.zoom ?? mapRef.current.getZoom(), duration: 1500 })
+    }
+  }, [target])
+
+  const selected = useMemo(() => events.find((e) => e.properties.id === selectedId) ?? null, [events, selectedId])
+
+  // Popup anchored at the selected event. Content is rendered by React through a portal.
+  const selectedKey = selected ? `${selected.properties.id}:${selected.properties.lng},${selected.properties.lat}` : null
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map || !selected) return
+    const node = document.createElement('div')
+// closeOnClick is off: the click that selects an event would also close its popup
+    const popup = new maplibregl.Popup({ offset: 14, maxWidth: '360px', closeOnClick: false, className: 'event-popup' })
+      .setLngLat([selected.properties.lng, selected.properties.lat])
+      .setDOMContent(node)
+      .addTo(map)
+    // remove() also fires 'close'; only a close made by the user clears the selection
+    let disposed = false
+    popup.on('close', () => {
+      if (!disposed) handlers.current.onSelect(null)
+    })
+    setPopupNode(node)
+    return () => {
+      disposed = true
+      popup.remove()
+      setPopupNode(null)
+    }
+    // Keyed on id and position so a data refresh does not reopen the popup
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedKey])
+
   const layers = useMemo(() => {
-    const areas = events.filter((e) => e.geometry.type !== 'Point')
+    const shapes = events.filter((e) => e.geometry.type !== 'Point')
+    const points = events.filter((e) => e.geometry.type === 'Point')
+    const isSelected = (f: EventFeature) => f.properties.id === selectedId
     return [
-      new H3HexagonLayer<Cell>({
-        id: 'cells',
-        data: showFine ? cellsFine : cellsCoarse,
-        getHexagon: (c) => c.h3,
-        getFillColor: (c) => scoreColor(c.score, 170),
-        getElevation: (c) => c.score * MAX_EXTRUSION_M * (showFine ? 1 : 4),
-        extruded: true,
-        elevationScale: 1,
-        coverage: 0.9,
-        pickable: true,
-        transitions: { getElevation: 600, getFillColor: 600 },
-        updateTriggers: { getElevation: showFine },
+      // Metropolitan Police recorded crime, weighted by category, as a density surface
+      new HeatmapLayer<CrimeRow>({
+        // The id includes the projection so the layer is rebuilt on a switch; a
+        // projection change alone does not make it aggregate again.
+        id: `crime-heatmap-${projection}`,
+        data: projection === 'mercator' ? crimeRows : [],
+        getPosition: (r) => [r[0], r[1]],
+        getWeight: (r) => r[3],
+        radiusPixels: 40,
+        intensity: 1,
+        threshold: 0.04,
+        colorRange: HEATMAP_COLORS,
+        opacity: 0.65,
+        aggregation: 'SUM',
       }),
-      new GeoJsonLayer({
-        id: 'event-areas',
-        data: areas,
+      // Affected radius for events that only have a point location
+      new ScatterplotLayer<EventFeature>({
+        id: 'event-radius',
+        data: points,
+        getPosition: (f) => [f.properties.lng, f.properties.lat],
+        getRadius: (f) => f.properties.radius_m,
+        radiusUnits: 'meters',
+        getFillColor: (f) => scoreColor(f.properties.risk, 50),
+        getLineColor: (f) => scoreColor(f.properties.risk, 200),
+        stroked: true,
+        lineWidthMinPixels: 1,
+      }),
+      // Road segments (lines) and areas (polygons), coloured by current risk
+      new GeoJsonLayer<EventFeature['properties']>({
+        id: 'event-shapes',
+        data: shapes,
         filled: true,
         stroked: true,
-        getFillColor: (f) => [...CATEGORY_COLOR[(f as EventFeature).properties.category], 60],
-        getLineColor: (f) => [...CATEGORY_COLOR[(f as EventFeature).properties.category], 220],
-        lineWidthMinPixels: 1.5,
-        visible: showFine,
+        getFillColor: (f) => scoreColor(f.properties.risk, 70),
+        getLineColor: (f) => (isSelected(f as EventFeature) ? [255, 255, 255, 255] : scoreColor(f.properties.risk, 240)),
+        getLineWidth: (f) => 3 + 6 * f.properties.severity,
+        lineWidthUnits: 'pixels',
+        lineCapRounded: true,
+        lineJointRounded: true,
+        pickable: true,
+        updateTriggers: { getLineColor: selectedId },
       }),
+      // Clickable marker for every event, tinted by category
       new ScatterplotLayer<EventFeature>({
-        id: 'events',
+        id: 'event-markers',
         data: events,
         getPosition: (f) => [f.properties.lng, f.properties.lat],
-        getRadius: (f) => (f.properties.id === selectedId ? 10 : 4 + 6 * f.properties.risk),
+        getRadius: (f) => (isSelected(f) ? 11 : 7),
         radiusUnits: 'pixels',
-        getFillColor: (f) => [...CATEGORY_COLOR[f.properties.category], 230],
+        getFillColor: (f) => [...CATEGORY_COLOR[f.properties.category], 255],
         getLineColor: [255, 255, 255, 255],
-        getLineWidth: (f) => (f.properties.id === selectedId ? 2 : 0.5),
+        getLineWidth: (f) => (isSelected(f) ? 3 : 1.5),
         lineWidthUnits: 'pixels',
         stroked: true,
         pickable: true,
-        visible: showFine,
+        // Markers stay visible in front of extruded buildings
+        parameters: { depthCompare: 'always' },
         updateTriggers: { getRadius: selectedId, getLineWidth: selectedId },
       }),
     ]
-  }, [cellsFine, cellsCoarse, events, selectedId, showFine])
+  }, [events, crimeRows, selectedId, projection])
 
   useEffect(() => {
     overlayRef.current?.setProps({
       layers,
       onClick: (info: PickingInfo) => {
-        if (info.layer?.id === 'events') onSelect((info.object as EventFeature).properties.id)
-        else if (info.layer?.id === 'cells') onSelect((info.object as Cell).top_event_ids[0] ?? null)
-        else onSelect(null)
-      },
-      getTooltip: (info: PickingInfo) => {
-        if (info.layer?.id === 'events') return (info.object as EventFeature).properties.title
-        if (info.layer?.id === 'cells') {
-          const c = info.object as Cell
-          return `Risk ${c.score.toFixed(2)} (live ${c.live.toFixed(2)}, baseline ${c.baseline.toFixed(2)})`
+        const feature = info.object as EventFeature | undefined
+        if (feature?.properties?.id) handlers.current.onSelect(feature.properties.id)
+        else if (info.coordinate) {
+          handlers.current.onSelect(null)
+          handlers.current.onMapClick({ lng: info.coordinate[0], lat: info.coordinate[1] })
         }
-        return null
       },
+      getTooltip: (info: PickingInfo) => (info.object as EventFeature | undefined)?.properties?.title ?? null,
+      getCursor: ({ isHovering }: { isHovering: boolean }) => (isHovering ? 'pointer' : 'crosshair'),
     })
-  }, [layers, onSelect])
+  }, [layers])
 
-  return <div ref={container} className="map" />
+  return (
+    <>
+      <div ref={container} className="map" />
+      {popupNode && selected && createPortal(<EventDetail event={selected} />, popupNode)}
+    </>
+  )
 }
 
-function add3dBuildings(map: maplibregl.Map) {
+function add3dBuildings(map: maplibregl.Map, theme: Theme) {
   if (map.getLayer('buildings-3d') || !map.getSource('openmaptiles')) return
   map.addLayer({
     id: 'buildings-3d',
@@ -141,7 +245,7 @@ function add3dBuildings(map: maplibregl.Map) {
     'source-layer': 'building',
     minzoom: 13,
     paint: {
-      'fill-extrusion-color': '#2a2f3a',
+      'fill-extrusion-color': BUILDING_COLOR[theme],
       'fill-extrusion-height': ['coalesce', ['get', 'render_height'], 8],
       'fill-extrusion-base': ['coalesce', ['get', 'render_min_height'], 0],
       'fill-extrusion-opacity': 0.85,

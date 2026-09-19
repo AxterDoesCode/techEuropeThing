@@ -6,11 +6,12 @@ from ..models import Event, RawItem
 
 
 class StructuredSource(Protocol):
-    """A feed whose items already carry location and severity fields.
+    """A feed whose items map to at most one event each, identified upstream.
 
     `snapshot` is True when every fetch returns the complete set of currently
     active items. Events from such a source are marked ended once they are no
-    longer in the fetch result.
+    longer in the fetch result. An empty fetch result ends nothing unless the
+    source also sets `empty_is_valid = True`.
     """
 
     id: str
