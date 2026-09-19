@@ -40,8 +40,11 @@ def test_crime_summary_counts_only_points_inside():
         [SOHO[0] + 0.001, SOHO[1], 5, 2.0, "On or near Dean Street", {"other-theft": 5}],
         [SOHO[0] + 0.05, SOHO[1], 99, 50.0, "On or near Far Road", {"robbery": 99}],
     ]
-    s = area.crime_summary(rows, "2026-07", *SOHO, 400)
+    meta = {"month": "2026-07", "period": "2025-09..2026-08", "method": "MPS recorded crime per LSOA"}
+    s = area.crime_summary(rows, meta, *SOHO, 400)
     assert s["recorded_crimes"] == 15 and s["weighted"] == 8.0 and s["month"] == "2026-07"
+    assert s["period"] == "2025-09..2026-08" and s["method"].startswith("MPS")
+    assert area.crime_summary(rows, {}, *SOHO, 400)["period"] is None
     assert s["top_categories"] == {"other-theft": 8, "violent-crime": 4}
     assert s["top_streets"][0] == {"street": "On or near Old Compton Street", "recorded_crimes": 10}
 

@@ -39,12 +39,13 @@ def _cell_table() -> tuple[dict[str, dict[str, float]], list[float]]:
     return table, sorted(c.score for c in cells)
 
 
-def _crime_rows() -> tuple[str | None, list[list[Any]]]:
+def _crime_rows() -> tuple[dict[str, Any], list[list[Any]]]:
+    """Metadata of the crime data set (month, period, method) and its rows."""
     payload = db.latest_crime_points_json()
     if payload is None:
-        return None, []
+        return {}, []
     data = json.loads(payload)
-    return data.get("month"), data.get("rows", [])
+    return {k: v for k, v in data.items() if k not in ("rows", "columns")}, data.get("rows", [])
 
 
 @router.get("/api/area")
@@ -59,7 +60,7 @@ def get_area(
         raise HTTPException(422, f"point is outside Greater London (lng {w}..{e}, lat {s}..{n})")
     now = utcnow()
     table, all_sorted = _cached("cells", _cell_table)
-    month, rows = _cached("crime", _crime_rows)
+    crime_meta, rows = _cached("crime", _crime_rows)
 
     pad_lat = (radius_m + 3000) / _M_PER_DEG_LAT
     pad_lng = pad_lat / 0.6225  # cos(51.5 deg)
@@ -69,7 +70,7 @@ def get_area(
         "radius_m": radius_m,
         "generated_at": now.isoformat(),
         "risk": area.risk_summary(area.cells_within(lng, lat, radius_m), table, all_sorted),
-        "crime": area.crime_summary(rows, month, lng, lat, radius_m),
+        "crime": area.crime_summary(rows, crime_meta, lng, lat, radius_m),
         "events": area.events_within(events, lng, lat, radius_m, now),
     }
 
