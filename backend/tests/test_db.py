@@ -48,10 +48,11 @@ def test_event_round_trip_preserves_fields(repo):
 def test_changed_upstream_item_updates_event_and_raw_item(repo):
     run_poll(FixtureSource(FIXTURE), repo)
     changed = json.loads(json.dumps(FIXTURE))
-    changed[0]["severity"] = "Severe"
+    # tfl_road ignores upstream traffic severity; a category change alters the event
+    changed[0]["category"], changed[0]["subCategory"] = "Hazards", "Fire"
     assert run_poll(FixtureSource(changed), repo)["inserted"] == 0
     ev = next(e for e in db.events_geojson(utcnow()) if e.external_ref == f"tfl_road:{changed[0]['id']}")
-    assert ev.severity == 0.8
+    assert ev.severity == 0.6
 
 
 def test_raw_items_keep_ids_across_polls(repo):
