@@ -47,11 +47,6 @@ export function CrimeDetail({ pos, summary }: Props) {
           </dl>
         </>
       )}
-      <p className="meta source">
-        Counts: data.police.uk, one month: robbery, violence, theft from the person, weapons and public order at
-        anonymised street points; records at hospitals, police stations, shops and similar venues are excluded. No time
-        of day. The heatmap uses 12 months of MPS recorded crime per LSOA, per km of walkable street.
-      </p>
     </div>
   )
 }
