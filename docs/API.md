@@ -65,15 +65,47 @@ Errors: 422 when a point is more than 300 m from the walking network or outside 
 
 ## POST CHAT_BASE/api/chat
 
-Body: `{"messages": [{"role": "user"|"assistant", "content": "…"}]}` — the whole conversation so far, last message from the user (max 30 messages, 2000 characters each). The server keeps no state.
+Body: `{"messages": [{"role": "user"|"assistant", "content": "…"}], "context": {…}}`. `messages` is the whole conversation so far, last message from the user (max 30 messages, 2000 characters each). The server keeps no state.
+
+`context` is optional and every key in it is optional; unknown keys are ignored. It describes the client's map, so that questions such as "what is happening around here" can be answered:
+
+```json
+{"center": [lng, lat], "bounds": [west, south, east, north], "zoom": 14.2, "selected_event_id": "<event id>"}
+```
+
+`center` and `zoom` are given to the model as facts; `selected_event_id` is looked up with `GET /api/events/{id}` and its title and position are given to the model (an id that is not found is ignored). `bounds` is accepted and not used at present.
+
+Response:
 
 ```json
 {"answer": "…", "sources": [{"title": "…", "url": "https://…"}],
  "places": [{"query": "Brixton", "found": true, "label": "Brixton, London…", "lat": 51.46, "lng": -0.11, "precision_m": 900}],
- "tool_calls": ["find_place('Brixton')", "area_report(51.4627, -0.1145, 500)"]}
+ "tool_calls": ["find_place('Brixton')", "area_report(51.4627, -0.1145, 500)"],
+ "ui": {
+   "intent": "route" | "area" | "other",
+   "route": { /* the full body of POST /api/route for the route the answer describes */ } | null,
+   "route_labels": {"origin": "Bloomsbury garden", "destination": "Euston station"} | null,
+   "area": {"label": "Bethnal Green", "center": [lng, lat], "radius_m": 500, "bbox": [w, s, e, n] | null} | null,
+   "events": [ /* GeoJSON Features as in /api/events, plus properties.relevance */ ],
+   "highlight_event_ids": ["<event id>"],
+   "focus": "route" | "area" | null
+ }}
 ```
 
-An answer takes 5–25 s. Errors: 429 (20 questions per 10 minutes per address), 502 (model error), 503 (no model configured).
+`answer`, `sources`, `places` and `tool_calls` are unchanged. The strings in `tool_calls` keep their format (`find_place('query')`, `area_report(lat, lng, radius)`, `hotels_near(lat, lng, radius)`, `walking_route((lat, lng) -> (lat, lng))`); a client must ignore strings it does not recognise.
+
+`ui` is additive and always present. It tells a map client what to draw for the answer:
+
+- `intent`: `"route"` when the answer describes a walking route, `"area"` when it summarises a place, `"other"` otherwise (plain answers, hotels, tool errors, places outside London). With `"other"`, `route`, `route_labels`, `area` and `focus` are null and both lists are empty, except that `route` can be set when the model asked for a route to be drawn in another kind of answer.
+- `route`: the response of `POST /api/route` exactly as the platform API returned it (`fast`, `safe`, `night_multiplier`, …). Draw `safe` as the main line and `fast` as the secondary one. `route_labels` are display names of the two ends; they are text chosen by the model or taken from the geocoder, so render them as text.
+- `area`: the circle the answer summarises. `center` and `radius_m` are those of the `/api/area` response; `bbox` is the bounding box of the circle; `label` is a display name (render as text).
+- `events`: all events relevant to the answer, at most 40, highest current `risk` first: for a route, the active events whose footprint (a Point event's `radius_m` disc, or the line/polygon geometry) is within 60 m of the lower-risk route; for an area, the events of the `/api/area` response. Every Feature is as `/api/events` returns it with one more property, `relevance: {"distance_m": float, "along_m": float | null}`: for a route, `distance_m` is the distance from the route line to the event geometry (0 when they touch) and `along_m` the distance from the start of the route to the point of the route closest to the event; for an area, `distance_m` is the distance from the centre of the area to the event centre and `along_m` is null. Area events also carry `properties.distance_m` as in `/api/area`.
+- `highlight_event_ids`: the ids of the events the answer text mentions, in order of mention. Always a subset of the ids in `events`.
+- `focus`: what the map should fit to; `"route"` only when `route` is set, `"area"` only when `area` is set.
+
+The model does not write any of these payloads. Its structured output holds the answer text, the intent, a flag for drawing the route, the ids of the events it mentions and the focus; the server attaches the route, the area and the events from what the agent's tools received from the platform API during this request, drops ids that are not among those events, and attaches a route or an area only when the corresponding tool call succeeded during this request.
+
+An answer takes 5–25 s. Errors: 429 (20 questions per 10 minutes per address), 502 (model error), 503 (no model configured); the body is `{"detail": "…"}`.
 
 ## Existing endpoints
 
