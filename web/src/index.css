@@ -121,7 +121,6 @@ html, body, #root, .app { height: 100%; margin: 0; }
 .crime-detail dl div { display: flex; justify-content: space-between; gap: 12px; }
 .crime-detail dt { color: var(--text); }
 .crime-detail dd { font-variant-numeric: tabular-nums; }
-.crime-detail .source { margin-top: 10px; border-top: 1px solid var(--border); padding-top: 6px; font-size: 11px; }
 .detail a { display: block; color: var(--accent); word-break: break-all; font-size: 12px; }
 .event-popup .maplibregl-popup-content {
   background: var(--bg);
