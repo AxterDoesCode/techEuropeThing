@@ -42,7 +42,7 @@ Checked on 2026-09-19 from this machine.
 
 Not yet checked, worth adding if time allows: London Fire Brigade incident data (London Datastore), TfL JamCam locations (CCTV coverage proxy), OSM `lit=yes/no` tags (street lighting, from the same OSM extract used for routing), additional local RSS (Evening Standard, MyLondon).
 
-Considered and removed: LondonAir air quality index (built, then removed on 2026-09-19: air quality does not change a walking route, so it is not a relevant risk signal here).
+Considered and removed: GDELT doc API (dropped 2026-09-19 before being built: it only indexes articles after outlets publish them, so it is slower than polling the same outlets' RSS directly; London incident news comes from a small known set of outlets; rate limit of 1 request per 5 s); LondonAir air quality index (built, then removed on 2026-09-19: air quality does not change a walking route, so it is not a relevant risk signal here).
 
 Dropped 2026-09-19: GDELT. It only discovers articles (no text, city-level locations), so each hit still needs the extraction agent; the direct feeds (`met_news`, `bbc_london`, `standard_london`, `mylondon`) cover the same outlets sooner.
 
@@ -203,7 +203,7 @@ Each message is `event: <type>`, `id: <mark>`, `data: <one line of JSON>`. The m
 
 - The server reads `db.changes_since(mark)` every 2 s per connection (SQLite has no change notification). The endpoint is a coroutine; only the query runs in the threadpool, so an idle stream holds no thread. A comment line `: ping` is sent after 15 s without output.
 - Resume: the `Last-Event-ID` header (sent by EventSource on its own reconnects) takes precedence over `?since=<ISO timestamp>`; without either the stream starts at the current time. The start is limited to the last 15 minutes. Every read starts 10 s before the mark, because writers assign timestamps before their transaction (on Modal before the RPC to the Store), and rows already sent on the connection are skipped. A reconnecting client can therefore receive a message twice; all messages are idempotent.
-- The server closes each connection after 10 minutes: Modal limits request duration and every open stream occupies one of the Store container's 100 concurrent input slots. EventSource reconnects and resumes from `Last-Event-ID`.
+- The server closes each connection after 60 seconds. The Store is a single container, and on a redeploy the new container starts only after the old one has finished its open requests; a 10-minute stream lifetime caused about 2.5 minutes of downtime per deploy. Every open stream also occupies one of the container's 100 concurrent input slots. EventSource reconnects and resumes from `Last-Event-ID`.
 - Risk decay does not write a row, so an event whose risk falls below 0.05 by time alone is not reported; the client reloads `/api/events` every 5 minutes while connected.
 - `text/event-stream` is in Starlette's `GZipMiddleware` default exclusion list, so the stream is not compressed or buffered.
 
