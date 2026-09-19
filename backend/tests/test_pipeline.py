@@ -28,9 +28,9 @@ class MemoryRepo:
             self.raw.setdefault((it.source_id, it.external_id), len(self.raw) + 1)
         return {it.external_id: self.raw[(it.source_id, it.external_id)] for it in items}
 
-    def upsert_structured_event(self, ev: Event) -> bool:
-        inserted = ev.external_ref not in self.events
-        self.events[ev.external_ref] = ev
+    def upsert_structured_events(self, events: list[Event]) -> int:
+        inserted = sum(ev.external_ref not in self.events for ev in events)
+        self.events |= {ev.external_ref: ev for ev in events}
         return inserted
 
     def end_missing(self, source_id: str, seen_refs: Iterable[str], at: datetime) -> int:

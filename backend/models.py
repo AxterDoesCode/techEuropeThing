@@ -29,7 +29,6 @@ class Category(str, Enum):
     ROAD_CLOSURE = "road_closure"
     TRANSIT_DISRUPTION = "transit_disruption"
     FLOOD = "flood"
-    AIR_QUALITY = "air_quality"
     WEATHER = "weather"
     OTHER = "other"
 
@@ -51,7 +50,6 @@ CATEGORY_DEFAULTS: dict[Category, CategoryDefaults] = {
     Category.ROAD_CLOSURE: CategoryDefaults(None, 150, "road"),
     Category.TRANSIT_DISRUPTION: CategoryDefaults(None, 200, "transit"),
     Category.FLOOD: CategoryDefaults(None, 100, "flood"),
-    Category.AIR_QUALITY: CategoryDefaults(60, 1000, "air"),
     Category.WEATHER: CategoryDefaults(60, 2000, "weather"),
     Category.OTHER: CategoryDefaults(60, 200, "other"),
 }

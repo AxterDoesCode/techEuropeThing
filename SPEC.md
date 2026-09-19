@@ -4,7 +4,7 @@ Replaces `HANDOFF_SPEC.md`. Scope: Greater London only. Hackathon proof of conce
 
 ## 1. Product
 
-A fleet of polling agents continuously writes geo-located events (crime, disorder, fires, transport disruption, flooding, air quality, road closures) into one central database. Every event is keyed by a geometry and an H3 cell. A scoring job turns events into a per-cell risk value that decays over time. A web client renders a 3D globe, focused on London, with risk cells highlighted and individual events inspectable. Phase 2 adds walking routes that weight street segments by the same cell risk.
+A fleet of polling agents continuously writes geo-located events (crime, disorder, fires, transport disruption, flooding, road closures) into one central database. Every event is keyed by a geometry and an H3 cell. A scoring job turns events into a per-cell risk value that decays over time. A web client renders a 3D globe, focused on London, with risk cells highlighted and individual events inspectable. Phase 2 adds walking routes that weight street segments by the same cell risk.
 
 Priority order:
 
@@ -19,8 +19,8 @@ Priority order:
 | :--- | :--- |
 | Region | Greater London, bbox `-0.5104, 51.2868, 0.3340, 51.6919` |
 | Agent runtime | Modal (scheduled functions + `asgi_app` for the API) |
-| Database | Hosted Postgres with PostGIS (Supabase or Neon). Must be reachable from Modal, so not SQLite and not `modal.Dict` |
-| Spatial key | H3. Events stored at resolution 10, scores aggregated at resolutions 9 (street level, ~175 m edge) and 7 (city level, ~1.2 km edge). H3 indexes computed in Python with `h3`, stored as `text`; no dependency on the `h3-pg` extension |
+| Database | SQLite, hosted on Modal (decided 2026-09-19: no external database service). One `Store` container (`max_containers=1`) owns the file, serves the API, runs rescoring and executes all storage calls from the pollers. It works on container-local disk and writes a snapshot to a Modal Volume every 30 s and on shutdown, restoring it on start. At most 30 s of writes are lost on a crash, and the next polls re-create them. No PostGIS: spatial work is done in Python (shapely, H3), which is sufficient at hundreds of events |
+| Spatial key | H3. Events stored at resolution 10, scores aggregated at resolutions 9 (street level, ~175 m edge) and 7 (city level, ~1.2 km edge). H3 indexes computed in Python with `h3`, stored as `text` |
 | LLM | Provider-agnostic. Use `pydantic-ai`; model selected by env var, e.g. `LLM_MODEL=anthropic:claude-haiku-4-5`, `google-gla:gemini-2.5-flash`, `openai:gpt-...`. Output type is the Pydantic event model |
 | Globe | deck.gl 9.4 on MapLibre GL JS **5.x** with `projection: globe`, `MapboxOverlay({interleaved: true})`. Verified 2026-09-19: hexagons, pitch and extrusion render correctly on the globe. MapLibre 6 must not be used: it removed `map.transform`, which deck.gl 9.4 reads, and every frame throws. Projection is `globe` below zoom 7 and `mercator` from zoom 7, switched in code: deck.gl's `HeatmapLayer` draws nothing under globe, and deck.gl rejects MapLibre's interpolated projection type. deck.gl `IconLayer` did not render in interleaved mode in testing; markers use `ScatterplotLayer`. Keyless basemaps: OpenFreeMap `dark` and `positron` (light mode) |
 | Backend | One backend: FastAPI in Python. No Express server |
@@ -36,13 +36,14 @@ Checked on 2026-09-19 from this machine.
 | TfL road disruptions | `api.tfl.gov.uk/Road/all/Disruption` | 200, no key | Real time | No | Closures, works, collisions. Has `point`, `severity`, `category`, free-text `comments` |
 | TfL line status / stop disruptions | `api.tfl.gov.uk/Line/Mode/tube,overground,dlr,elizabeth-line/Status`, `/StopPoint/Mode/{mode}/Disruption` | 200, no key | Real time | No | Station closures, severe delays. Geometry from StopPoint lat/lon |
 | Environment Agency floods | `environment.data.gov.uk/flood-monitoring/id/floods?lat=51.5&long=-0.12&dist=30` | 200, no key | Real time | No | Flood warnings; flood area polygons available via the linked `floodArea` resource |
-| LondonAir (Imperial ERG) | `api.erg.ic.ac.uk/AirQuality/Hourly/MonitoringIndex/GroupName=London/Json` | 200, no key | Hourly | No | Air quality index per monitoring site, with lat/lon |
 | Open-Meteo | `api.open-meteo.com/v1/forecast?...&current=` | 200, no key | 15 min | No | Wind gusts, heavy rain as a city-wide modifier |
 | BBC London RSS | `feeds.bbci.co.uk/news/england/london/rss.xml` | 200 | Minutes to hours | Yes | Unstructured incident reports; requires extraction + geocoding |
 | GDELT doc API | `api.gdeltproject.org/api/v2/doc/doc?...` | 429 when called back to back; limit is 1 request per 5 s | 15 min | Yes | Wider news coverage. Poll at most once per minute |
 | Met Police news | `news.met.police.uk/rss/current_news/66871` (advertised in the newsroom page's `<link rel=alternate>`) | 200 | Hours; ~20 items, a few per day | Yes (rule-based fallback implemented) | Official incident statements and appeals. Most items are court outcomes and are rejected by the pre-filter |
 
 Not yet checked, worth adding if time allows: London Fire Brigade incident data (London Datastore), TfL JamCam locations (CCTV coverage proxy), OSM `lit=yes/no` tags (street lighting, from the same OSM extract used for routing), additional local RSS (Evening Standard, MyLondon).
+
+Considered and removed: LondonAir air quality index (built, then removed on 2026-09-19: air quality does not change a walking route, so it is not a relevant risk signal here).
 
 Dropped from the Gemini spec: X/Twitter geo posts (no usable access), satellite night-light data (VIIRS resolution is ~500 m, useless per street), "Police CAD" (no public dispatch feed exists for London).
 
@@ -51,8 +52,11 @@ TfL allows anonymous calls at a low rate; register a free `app_key` to avoid thr
 ## 4. Architecture
 
 ```
+Modal class Store (single container): SQLite file, HTTP API, rescoring, Store.call for storage RPC
+   snapshot to Modal Volume `london-risk-db` every 30 s
+
 Modal cron: dispatcher (every 1 min)
-   reads `sources` table -> for each source that is due: spawn poll_source(source_id)
+   asks Store which sources are due -> spawn poll_source(source_id) for each
 
 poll_source(source_id)                      [Modal function, one container per call]
    fetch -> upsert into raw_items (dedupe on source_id + external_id/content hash)
@@ -75,7 +79,7 @@ A single dispatcher cron is used instead of one cron per source because Modal's 
 
 ### Agent types
 
-1. **Structured pollers** — TfL road (`tfl_road`), TfL station disruptions (`tfl_transit`), EA floods (`ea_floods`), LondonAir (`london_air`), police.uk (one-off `backfill_police`). Deterministic field mapping. No LLM. Open-Meteo is not built. A snapshot source ends events that leave its feed; an empty fetch ends nothing unless the source sets `empty_is_valid` (floods: no warnings is the normal state). LondonAir event ids include the bulletin hour, so each hourly reading is its own decaying event.
+1. **Structured pollers** — TfL road (`tfl_road`), TfL station disruptions (`tfl_transit`), EA floods (`ea_floods`), police.uk (one-off `backfill_police`). Deterministic field mapping. No LLM. Open-Meteo is not built. A snapshot source ends events that leave its feed; an empty fetch ends nothing unless the source sets `empty_is_valid` (floods: no warnings is the normal state).
 2. **Extraction agents** — RSS, GDELT, manual inject. Implemented so far: `met_news` with the code pre-filter, the geocoder, and a rule-based extractor (`extract_rules.py`: keyword category/severity, place from headline patterns, one incident per item) that is used while no LLM is configured. Met statements are published hours after the incident, so `met_news` events use a 24 h half-life instead of the category default. A tool-using LLM agent (`pydantic-ai`) with output type `list[ExtractedEvent]`; one article can describe zero, one or several incidents.
 
 ### Extraction agent
@@ -103,85 +107,17 @@ Order inside the `geocode` tool: (1) UK postcode in text -> `api.postcodes.io` (
 
 ## 5. Database schema
 
-```sql
-create extension if not exists postgis;
+`backend/sql/schema.sql` (SQLite) is the reference. Tables: `sources`, `raw_items` (payload rewritten only when its hash changes), `events`, `baseline_cells`, `crime_points`, `cell_scores`, `agent_runs`, `geocode_cache` (hits and misses).
 
-create table sources (
-  id text primary key,                 -- 'tfl_road', 'bbc_london', ...
-  kind text not null,                  -- 'structured' | 'unstructured'
-  poll_interval_s int not null,
-  enabled boolean not null default true,
-  last_polled_at timestamptz,
-  last_status text,                    -- 'ok' | 'error: ...'
-  cursor jsonb                         -- etag, last seen id, etc.
-);
+Conventions: timestamps are ISO 8601 UTC text in one fixed-width format, so text comparison orders them; lists and objects are JSON text; geometry is GeoJSON text with `lng`/`lat` centroid columns for bbox filters; event ids are UUID text generated in Python. `events.external_ref` (`<source_id>:<upstream id>`) is the upsert identity. An upsert writes (and bumps `updated_at`) only when a compared field changed or the event had ended.
 
-create table raw_items (
-  id bigserial primary key,
-  source_id text references sources(id),
-  external_id text not null,           -- upstream id, or sha256 of content
-  fetched_at timestamptz not null default now(),
-  payload jsonb not null,
-  processed boolean not null default false,
-  unique (source_id, external_id)
-);
+Process model: `db.connect(path)` opens one shared connection; every operation runs under one lock. `SqliteRepo` holds the pipeline's storage operations; pollers in other Modal containers reach it through `RemoteRepo`, which forwards each call to `Store.call`. `run_poll` makes 6 storage calls per poll (events are written in one batch).
 
-create table events (
-  id uuid primary key default gen_random_uuid(),
-  category text not null,
-  title text not null,
-  summary text,
-  geom geometry(Geometry, 4326) not null,   -- point or polygon
-  centroid geometry(Point, 4326) not null,
-  radius_m real not null,
-  h3_r10 text not null,
-  h3_r9 text not null,
-  h3_r7 text not null,
-  severity real not null check (severity between 0 and 1),
-  confidence real not null check (confidence between 0 and 1),
-  half_life_min real not null,
-  occurred_at timestamptz not null,
-  expires_at timestamptz,                   -- set when upstream gives an end time
-  ended_at timestamptz,                     -- when upstream stopped listing it
-  external_ref text unique,                 -- '<source_id>:<upstream id>' for structured sources
-  source_confidence jsonb not null,         -- per-source confidence, recombined on merge
-  source_ids text[] not null,
-  raw_item_ids bigint[] not null,
-  urls text[] not null default '{}',
-  created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
-);
-create index on events using gist (geom);
-create index on events (h3_r9);
-create index on events (occurred_at desc);
-
-create table baseline_cells (               -- from police.uk + OSM lighting
-  h3 text primary key, res smallint not null,
-  crime_rate real not null,                 -- normalised 0..1 across London
-  lit_fraction real                         -- phase 2
-);
-
-create table cell_scores (
-  h3 text not null, res smallint not null,
-  live real not null, baseline real not null, score real not null,
-  top_event_ids uuid[] not null,
-  updated_at timestamptz not null,
-  primary key (h3, res)
-);
-
-create table agent_runs (
-  id bigserial primary key,
-  source_id text references sources(id),
-  started_at timestamptz not null, finished_at timestamptz,
-  fetched int, inserted int, merged int, llm_calls int, error text
-);
-
-create table geocode_cache (query text primary key, lat double precision, lng double precision, precision_m real, provider text);
-```
+Local development uses the same code without Modal: `python -m backend.local` (poll loop, rescoring and the API on port 8000, database at `data/risk.sqlite`).
 
 ## 6. Pydantic models (`backend/models.py`)
 
-- `Category` enum: `violent_crime`, `property_crime`, `disorder`, `fire`, `road_closure`, `transit_disruption`, `flood`, `air_quality`, `weather`, `other`.
+- `Category` enum: `violent_crime`, `property_crime`, `disorder`, `fire`, `road_closure`, `transit_disruption`, `flood`, `weather`, `other`.
 - `ExtractedEvent` (LLM output, returned as a list): `category`, `title` (<=120 chars), `summary`, `place_id` (from a `geocode` tool result), `place_text`, `severity` 0–1, `occurred_at | None`, `is_ongoing`, `existing_event_id | None`. No coordinates, no confidence; those are assigned by code.
 - `Event` (DB row): as in the table above.
 - All datetimes timezone-aware UTC (`datetime.now(timezone.utc)`), not `utcnow()`.
@@ -195,7 +131,6 @@ Per-category defaults, overridable per event:
 | fire | 120 | 200 | |
 | road_closure / transit_disruption | no decay while upstream lists it; 30 after it disappears | from geometry | 0.95 |
 | flood | no decay while warning active | polygon | 0.95 |
-| air_quality | 60 | 1000 | 0.9 |
 
 ## 7. Scoring
 
@@ -277,7 +212,8 @@ backend/
   app.py            Modal app: image, secrets, dispatcher cron, rescore cron, asgi mount
   api.py            FastAPI routes
   models.py         Pydantic models, category defaults
-  db.py             psycopg pool, queries
+  db.py             SQLite connection, SqliteRepo, read queries, snapshot
+  local.py          run the whole backend on one machine without Modal
   scoring.py        decay, cell aggregation, merge logic (pure functions, unit tested)
   pipeline.py       run_poll / run_rescore against a Repo protocol (PgRepo in db.py, in-memory repo in tests)
   tools/            export_sample.py: API-shaped JSON from live feeds, no database needed
@@ -293,15 +229,15 @@ web/
 SPEC.md
 ```
 
-Secrets (Modal secret `london-risk`): `DATABASE_URL`, `LLM_MODEL`, the matching provider key, optional `TFL_APP_KEY`.
+Optional Modal secret `london-risk`: `TFL_APP_KEY`, `LLM_MODEL` and the matching provider key. Deploy with `LONDON_RISK_SECRET=1` to attach it. No database credentials exist.
 
 ## 12. Build order
 
-1. Postgres + schema. `scoring.py` with unit tests (decay, merge, cell aggregation).
+1. Database schema. `scoring.py` with unit tests (decay, merge, cell aggregation).
 2. TfL road disruptions poller writing real rows, run locally with `modal run`. This is the first end-to-end path.
 3. FastAPI `/api/events` and `/api/cells`; rescore job.
 4. Frontend globe with hexagon and event layers reading the live API.
-5. Remaining structured pollers (TfL lines/stops, EA floods, LondonAir). Dispatcher cron. `/api/agents` and the fleet panel.
+5. Remaining structured pollers (TfL lines/stops, EA floods). Dispatcher cron. `/api/agents` and the fleet panel.
 6. police.uk baseline backfill (one-off job, 12 months, tiled over the bbox with `poly=`).
 7. Extraction agent path: pre-filter, geocode tool, `fetch_article`, `find_similar_events`, BBC RSS source, merge. Then GDELT and the Met feed. `/api/inject`.
 8. SSE, time slider, visual polish.
@@ -314,6 +250,6 @@ Working demo exists after step 4; every later step adds data or features without
 
 - deck.gl + MapLibre globe projection compatibility: check first, fallback listed in section 2.
 - Geocoding accuracy for news text is the main source of wrong events. Mitigation: low confidence and large radius for imprecise matches, and discard when no place resolves.
-- Live violent-crime signal for London is thin because no real-time police feed exists; most real-time volume will be transport, roads, floods, air quality. News-derived events fill part of the gap. The baseline layer carries the crime picture.
-- Modal SSE connection duration and cron count limits: verify on the actual plan.
+- Live violent-crime signal for London is thin because no real-time police feed exists; most real-time volume will be transport, roads, floods. News-derived events fill part of the gap. The baseline layer carries the crime picture.
+- Verified on Modal 2026-09-19: one class serving the ASGI API and RPC methods from a single container, `volume.commit()` from a background thread, snapshot restore across a redeploy, two crons. Still to verify: SSE connection duration.
 - Nominatim usage policy (1 req/s, identify with a User-Agent). Cache all results.

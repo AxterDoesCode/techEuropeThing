@@ -4,7 +4,8 @@ from datetime import datetime
 from typing import Any
 from uuid import UUID
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, Response
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.middleware.cors import CORSMiddleware
 
 from . import db
@@ -13,6 +14,7 @@ from .scoring import COARSE_RES, FINE_RES, MIN_EVENT_RISK, event_risk
 
 web = FastAPI(title="London Live Risk Map API")
 web.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+web.add_middleware(GZipMiddleware, minimum_size=10_000)
 
 
 def _parse_bbox(bbox: str | None) -> tuple[float, float, float, float] | None:
@@ -71,9 +73,10 @@ def get_agents() -> list[dict[str, Any]]:
 
 
 @web.get("/api/crime-points")
-def get_crime_points() -> dict[str, Any]:
+def get_crime_points() -> Response:
     """Latest month of Metropolitan Police street-level crime, one row per street point."""
-    payload = db.latest_crime_points()
+    payload = db.latest_crime_points_json()
     if payload is None:
         raise HTTPException(404, "no crime data loaded; run backfill_police")
-    return payload
+    # police.uk publishes monthly
+    return Response(payload, media_type="application/json", headers={"Cache-Control": "public, max-age=3600"})

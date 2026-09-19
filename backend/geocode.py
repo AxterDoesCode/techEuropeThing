@@ -9,7 +9,8 @@ from __future__ import annotations
 import re
 import threading
 import time
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
+from typing import Any, Protocol
 
 import httpx
 
@@ -32,7 +33,19 @@ class GeoResult:
     provider: str
 
 
+class GeocodeCache(Protocol):
+    def geocode_get(self, query: str) -> dict[str, Any] | None: ...
+    def geocode_put(self, query: str, result: dict[str, Any] | None) -> None: ...
+
+
 _cache: dict[str, GeoResult | None] = {}
+# Persistent cache (the repo). Without one, results are cached per process only.
+_store: GeocodeCache | None = None
+
+
+def use_cache(store: GeocodeCache | None) -> None:
+    global _store
+    _store = store
 _nominatim_lock = threading.Lock()
 _last_nominatim_call = 0.0
 
@@ -41,9 +54,21 @@ def geocode(place_text: str) -> GeoResult | None:
     key = " ".join(place_text.lower().split())
     if not key:
         return None
-    if key not in _cache:
-        _cache[key] = _postcode(place_text) or _nominatim(place_text)
-    return _cache[key]
+    if key in _cache:
+        return _cache[key]
+    if _store is not None and (row := _store.geocode_get(key)) is not None:
+        hit = row["lng"] is not None
+        _cache[key] = (
+            GeoResult(row["lng"], row["lat"], row["precision_m"], row["label"], row["provider"])
+            if hit
+            else None
+        )
+        return _cache[key]
+    result = _postcode(place_text) or _nominatim(place_text)
+    _cache[key] = result
+    if _store is not None:
+        _store.geocode_put(key, asdict(result) if result else None)
+    return result
 
 
 def _postcode(text: str) -> GeoResult | None:

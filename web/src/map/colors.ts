@@ -37,7 +37,6 @@ export const CATEGORY_COLOR: Record<Category, RGB> = {
   road_closure: [250, 200, 70],
   transit_disruption: [90, 170, 250],
   flood: [60, 120, 240],
-  air_quality: [150, 200, 120],
   weather: [170, 190, 210],
   other: [180, 180, 180],
 }
@@ -50,7 +49,6 @@ export const CATEGORY_LABEL: Record<Category, string> = {
   road_closure: 'Road disruption',
   transit_disruption: 'Transit disruption',
   flood: 'Flood',
-  air_quality: 'Air quality',
   weather: 'Weather',
   other: 'Other',
 }

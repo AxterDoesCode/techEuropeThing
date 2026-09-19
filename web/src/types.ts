@@ -8,7 +8,6 @@ export type Category =
   | 'road_closure'
   | 'transit_disruption'
   | 'flood'
-  | 'air_quality'
   | 'weather'
   | 'other'
 
