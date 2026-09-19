@@ -1,7 +1,7 @@
 """Build the compact walking graph used by backend/routing.py.
 
   python -m backend.tools.build_graph [--bbox w,s,e,n] [--out data/graph/walk.npz]
-                                      [--overpass-url URL] [--download-limit-s 7200]
+                                      [--overpass-url URL] [--download-limit-s 18000]
                                       [--tile-km 12]
 
 Downloads the OpenStreetMap walking network with osmnx, keeps the largest
@@ -51,7 +51,7 @@ GREATER_LONDON = (-0.5104, 51.2868, 0.3340, 51.6919)
 INNER_LONDON = (-0.26, 51.45, 0.02, 51.57)
 CENTRAL_LONDON = (-0.20, 51.48, -0.05, 51.545)
 ATTRIBUTION = "© OpenStreetMap contributors (ODbL)"
-DOWNLOAD_LIMIT_S = 7200
+DOWNLOAD_LIMIT_S = 5 * 3600
 TILE_KM = 12.0
 TILE_ATTEMPTS = 4
 
@@ -140,8 +140,9 @@ def _with_retries(what: str, fetch):
             time.sleep(wait)
 
 
-def _download(bbox: tuple[float, float, float, float], tile_km: float, limit_s: int, pause_s: float):
-    """(unsimplified graph of the whole bbox, park polygons)."""
+def _download(bbox: tuple[float, float, float, float], tile_km: float, limit_s: int, pause_s: float, on_tile=None):
+    """(unsimplified graph of the whole bbox, park polygons). `on_tile()` is called
+    after every tile, e.g. to persist the response cache."""
     import osmnx as ox
 
     def on_alarm(signum, frame):
@@ -183,16 +184,19 @@ def _download(bbox: tuple[float, float, float, float], tile_km: float, limit_s: 
                   f" peak RSS {_rss_mb()} MB", flush=True)
             # a tile answered from the cache takes well under a second; only a
             # tile that reached the server is followed by a pause
-            if took > 2 and i < len(boxes):
-                time.sleep(pause_s)
+            if took > 2:
+                if on_tile:
+                    on_tile()
+                if i < len(boxes):
+                    time.sleep(pause_s)
     except _DownloadTimeout:
-        raise SystemExit(
+        raise RuntimeError(
             f"download exceeded {limit_s} s after tile {i - 1}/{len(boxes)}. Completed tiles are cached:"
             " run the same command again to continue, or raise --download-limit-s.")
     finally:
         signal.alarm(0)
     if G is None:
-        raise SystemExit(f"no walkable ways found in {bbox}")
+        raise RuntimeError(f"no walkable ways found in {bbox}")
     return G, list(parks.values())
 
 
@@ -286,6 +290,7 @@ def build(
     overpass_url: str | None = None,
     tile_km: float = TILE_KM,
     pause_s: float = 2.0,
+    on_tile=None,
 ) -> dict:
     import osmnx as ox
 
@@ -300,7 +305,7 @@ def build(
     ox.settings.useful_tags_way = list(WAY_TAGS)
 
     started = time.monotonic()
-    G, parks = _download(bbox, tile_km, limit_s, pause_s)
+    G, parks = _download(bbox, tile_km, limit_s, pause_s, on_tile)
     download_s = time.monotonic() - started
     raw_nodes = G.number_of_nodes()
 
