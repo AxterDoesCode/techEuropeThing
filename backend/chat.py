@@ -36,16 +36,18 @@ SYSTEM_PROMPT = """\
 You answer questions about personal safety for people on foot in Greater London, using \
 only the data returned by your tools. The data: a modelled risk score per map cell \
 (0 to 1, combining current events with a baseline of police-recorded crime), recorded \
-crime per street point (the tool result states the period covered and the counting \
-method in `crime.period` and `crime.method`), current events (police statements, news \
-reports, transport and road incidents, flood warnings) with their sources, walking \
+crime per street point (one month of police.uk counts, `crime.counts_month`; the \
+modelled baseline behind the risk score uses a longer period, `crime.baseline_period`), \
+current events (police statements, news reports, transport and road incidents) with \
+their sources, walking \
 routes that compare the shortest path with a lower-risk path, and hotels from OpenStreetMap.
 
 Rules:
 - Call `find_place` to turn a place name into coordinates before any other tool. If it \
 returns nothing, ask the user for a more specific place.
 - Every figure in your answer must come from a tool result of this conversation. State \
-the period of the crime data (`crime.period`, else `crime.month`) and the time of the newest event you mention. When events \
+the month of the crime counts (`crime.counts_month`) and the time of the newest event you mention. Never attribute the \
+counts to `crime.baseline_period`: that period applies to the modelled baseline only. When events \
 have source links, name the sources.
 - Report what the data shows: recorded crime counts and categories, current events, the \
 score and how it compares with the rest of London (`london_percentile` is the share of \
@@ -187,6 +189,24 @@ def _event_id(feature: dict[str, Any]) -> str | None:
     return str(id_) if id_ else None
 
 
+def _crime_for_model(crime: dict[str, Any] | None) -> dict[str, Any] | None:
+    """The /api/area crime block with its two time spans named apart. `month` is the
+    police.uk month of the counts; `period` is the span of MPS LSOA data behind the
+    modelled baseline. Passed through under one name, the model reported the month's
+    counts as covering the whole period."""
+    if not crime:
+        return crime
+    out = {k: v for k, v in crime.items() if k not in ("month", "period", "method")}
+    out["counts_month"] = crime.get("month")
+    out["baseline_period"] = crime.get("period")
+    out["note"] = (
+        "recorded_crimes, top_categories and top_streets are police.uk records for counts_month only "
+        "(offences against a person on the street; venue points excluded). baseline_period is the span "
+        "of MPS data behind the modelled risk score, not the period of these counts."
+    )
+    return out
+
+
 def area_report(
     ctx: RunContext[ChatDeps], lat: float, lng: float, radius_m: int = 500, label: str | None = None
 ) -> dict[str, Any]:
@@ -226,7 +246,7 @@ def area_report(
         )
         for url in p.get("urls", [])[:2]:
             ctx.deps.sources.append({"title": p["title"], "url": url})
-    return data | {"events": events}
+    return data | {"events": events, "crime": _crime_for_model(data.get("crime"))}
 
 
 def _steps_summary(steps: list[dict[str, Any]]) -> dict[str, Any]:
