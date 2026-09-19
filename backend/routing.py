@@ -6,12 +6,20 @@ Graph file (.npz, written by backend/tools/build_graph.py through save_graph):
   edge_src, edge_dst   int32   [2M]  directed edge k and k + M are the two
                                      directions of undirected edge k % M
   edge_length          float32 [2M]  metres
-  edge_lit             uint8   [2M]  1 when the OSM tag lit == "yes"
+  edge_lit             uint8   [2M]  format 2: 0 unlit, 1 unknown, 2 lit (infer_lit)
+                                     format 1: 1 when the OSM tag lit == "yes", else 0
+  edge_class           uint8   [2M]  format 2 only: index into CLASS_NAMES
+  edge_flags           uint8   [2M]  format 2 only: bitfield FLAG_*
   cell_offsets         int32   [M+1] CSR over undirected edges
   cells                uint64        H3 res-9 cells (h3.str_to_int) the edge passes through
   geom_offsets         int32   [M+1] CSR over undirected edges, in points
   geom_coords          float32 [P,2] lng, lat from edge_src to edge_dst of edge k < M
   meta                 str           JSON: bbox, built_at, attribution, counts
+
+A file without edge_class is format 1 (written before road classes were stored).
+load_graph accepts it and edge_costs then uses the format 1 cost
+length * (1 + alpha * risk) * (1 - beta * lit), so a deployed backend keeps
+working until the graph is rebuilt.
 """
 
 from __future__ import annotations
@@ -19,6 +27,7 @@ from __future__ import annotations
 import json
 import math
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Iterable, Sequence
 
@@ -27,10 +36,14 @@ import numpy as np
 from scipy.sparse import csr_matrix
 from scipy.sparse.csgraph import dijkstra
 from scipy.spatial import cKDTree
+from zoneinfo import ZoneInfo
 
 CELL_RES = 9
 DEFAULT_ALPHA = 4.0
+# Format 1 graphs only: cost factor (1 - beta) on edges tagged lit=yes
 DEFAULT_BETA = 0.15
+# Format 2 graphs: cost factor (1 + gamma * (1 - lit01)), lit01 = 0 unlit, 0.5 unknown, 1 lit
+DEFAULT_GAMMA = 0.3
 WALK_SPEED_M_S = 1.35
 MAX_SNAP_M = 300.0
 # Street-level crime baseline: recorded crime points within this distance of a
@@ -46,6 +59,103 @@ SAMPLE_STEP_M = 50.0
 _REF_LAT = 51.5
 _M_PER_DEG_LAT = 111_320.0
 _M_PER_DEG_LNG = _M_PER_DEG_LAT * math.cos(math.radians(_REF_LAT))
+
+
+# edge_lit values (format 2)
+LIT_NO, LIT_UNKNOWN, LIT_YES = 0, 1, 2
+
+# edge_class values (format 2). The index is stored in the file: append new
+# names at the end, never reorder.
+CLASS_NAMES = (
+    "other",        # 0  any highway value not listed below (road, busway, elevator, ...)
+    "trunk",        # 1  trunk, trunk_link
+    "primary",      # 2  primary, primary_link
+    "secondary",    # 3  secondary, secondary_link
+    "tertiary",     # 4  tertiary, tertiary_link
+    "residential",  # 5  residential, unclassified, living_street
+    "pedestrian",   # 6
+    "service",      # 7  service without service=alley
+    "alley",        # 8  service with service=alley
+    "footway",      # 9  footway; FLAG_SIDEWALK set when footway=sidewalk|crossing
+    "path",         # 10
+    "cycleway",     # 11
+    "steps",        # 12
+    "bridleway",    # 13
+    "track",        # 14
+    "corridor",     # 15 always carries FLAG_INDOOR
+)
+CLASS_INDEX = {name: i for i, name in enumerate(CLASS_NAMES)}
+HIGHWAY_CLASS = {
+    "trunk": "trunk", "trunk_link": "trunk",
+    "primary": "primary", "primary_link": "primary",
+    "secondary": "secondary", "secondary_link": "secondary",
+    "tertiary": "tertiary", "tertiary_link": "tertiary",
+    "residential": "residential", "unclassified": "residential", "living_street": "residential",
+    "pedestrian": "pedestrian", "service": "service", "footway": "footway", "path": "path",
+    "cycleway": "cycleway", "steps": "steps", "bridleway": "bridleway", "track": "track",
+    "corridor": "corridor",
+}
+MAIN_ROAD_CLASSES = ("trunk", "primary", "secondary", "tertiary")
+# Classes on which a tunnel tag means a pedestrian underpass
+FOOT_CLASSES = ("pedestrian", "footway", "path", "cycleway", "steps", "bridleway", "track", "corridor")
+
+# edge_flags bits (format 2)
+FLAG_IN_PARK = 1    # edge midpoint inside a park polygon (build_graph.PARK_TAGS)
+FLAG_UNDERPASS = 2  # tunnel (other than building_passage) on a FOOT_CLASSES way
+FLAG_COVERED = 4    # covered=* or tunnel=building_passage
+FLAG_INDOOR = 8     # indoor=* or highway=corridor
+FLAG_SIDEWALK = 16  # highway=footway with footway=sidewalk|crossing
+
+# REVISIT(route-cost-weights): judgment values, not calibrated against any data.
+# Crime is recorded where people are, so risk alone sends the safe route to
+# towpaths, estate footpaths and back streets; these factors counter that.
+CLASS_MULTIPLIER = {
+    "other": 1.00,
+    "trunk": 0.95,
+    "primary": 0.85,
+    "secondary": 0.85,
+    "tertiary": 0.85,
+    "residential": 1.00,
+    "pedestrian": 0.90,
+    "service": 1.20,
+    "alley": 1.50,
+    "footway": 1.30,
+    "path": 1.30,
+    "cycleway": 1.30,
+    "steps": 1.30,
+    "bridleway": 1.60,
+    "track": 1.60,
+    "corridor": 1.30,
+}
+# Replaces the class multiplier of a footway that has FLAG_SIDEWALK
+SIDEWALK_MULTIPLIER = 1.00
+# Multiplied on top of the class multiplier
+IN_PARK_MULTIPLIER = 1.5
+# Of underpass, indoor and covered only the largest applicable factor is used:
+# an underpass is usually tagged covered=yes as well
+UNDERPASS_MULTIPLIER = 1.5
+INDOOR_MULTIPLIER = 1.5
+COVERED_MULTIPLIER = 1.15
+
+# Classes on which a missing lit tag is read as lit. Measured on the London
+# extract: where these roads carry the tag, >= 99% are lit=yes (secondary
+# 92-100%); 56-70% of walkable length has no lit tag at all.
+_LIT_BY_DEFAULT = ("trunk", "primary", "secondary", "tertiary", "residential", "pedestrian")
+# Missing lit tag read as unlit
+_UNLIT_BY_DEFAULT = ("path", "bridleway", "track")
+
+# REVISIT(night-multiplier): owner's decision, not calibrated. Factor on the
+# crime baseline by London local time: 1.0 from 06:00 to 18:00, a quarter sine
+# up to NIGHT_PEAK at 03:00, a quarter sine back down to 1.0 at 06:00.
+NIGHT_PEAK = 1.3
+NIGHT_START_H, NIGHT_PEAK_H, NIGHT_END_H = 18.0, 3.0, 6.0
+LONDON_TZ = ZoneInfo("Europe/London")
+
+# REVISIT(path-risk-score): placeholder. path_risk = 1 - exp(-K * sum(risk * metres)),
+# with K set so that 1000 m at risk 0.5 gives 0.5. It is not calibrated against
+# outcomes and the edge risk it sums will change as data sources are added.
+# Revisit the form and the constant once all data sources are in.
+PATH_RISK_K = math.log(2) / 500.0
 
 
 class RouteError(ValueError):
@@ -64,9 +174,15 @@ class Graph:
     cells: np.ndarray
     geom_offsets: np.ndarray
     geom_coords: np.ndarray
+    # format 1 files have no class or flags: residential and 0 are filled in
+    edge_class: np.ndarray
+    edge_flags: np.ndarray
     meta: dict[str, Any]
     bbox: tuple[float, float, float, float]
+    # 1: edge_lit is 0/1 and the cost uses beta; 2: classes, flags, 3-level lit
+    format: int
     # derived at load time
+    edge_multiplier: np.ndarray  # float32, class and flag factors of the cost
     tree: cKDTree
     unique_cells: np.ndarray  # sorted uint64
     cell_inverse: np.ndarray  # index into unique_cells for every entry of `cells`
@@ -115,20 +231,96 @@ def edge_cells(coords: Sequence[Sequence[float]], step_m: float = SAMPLE_STEP_M)
     return sorted(cells)
 
 
+def _values(value: Any) -> list[str]:
+    """Tag values of an edge. osmnx stores a list when simplification merged ways
+    with different values, and nothing (or NaN) when no way had the tag."""
+    if value is None or (isinstance(value, float) and math.isnan(value)):
+        return []
+    return [str(v) for v in value] if isinstance(value, (list, tuple, set)) else [str(value)]
+
+
+def classify(tags: dict[str, Any]) -> tuple[int, int]:
+    """(edge_class, edge_flags without FLAG_IN_PARK) from the OSM tags of an edge.
+    When merged ways differ, the class with the largest multiplier is used."""
+    highways = _values(tags.get("highway"))
+    service = _values(tags.get("service"))
+    footway = _values(tags.get("footway"))
+    names = []
+    for highway in highways:
+        name = HIGHWAY_CLASS.get(highway, "other")
+        if name == "service" and "alley" in service:
+            name = "alley"
+        names.append(name)
+    name = max(names, key=CLASS_MULTIPLIER.__getitem__) if names else "other"
+
+    flags = 0
+    if set(names) == {"footway"} and footway and set(footway) <= {"sidewalk", "crossing"}:
+        flags |= FLAG_SIDEWALK
+    tunnel = [v for v in _values(tags.get("tunnel")) if v != "no"]
+    if name in FOOT_CLASSES and any(v != "building_passage" for v in tunnel):
+        flags |= FLAG_UNDERPASS
+    if "building_passage" in tunnel or any(v != "no" for v in _values(tags.get("covered"))):
+        flags |= FLAG_COVERED
+    if "corridor" in highways or any(v != "no" for v in _values(tags.get("indoor"))):
+        flags |= FLAG_INDOOR
+    return CLASS_INDEX[name], flags
+
+
+def infer_lit(lit: Any, edge_class: int, flags: int) -> int:
+    """LIT_NO, LIT_UNKNOWN or LIT_YES.
+
+    An explicit tag decides: "no" (on any merged way) is unlit, every other
+    value (yes, 24/7, automatic, limited, ...) is lit. Without a tag: an edge
+    in a park, a path, a bridleway or a track is unlit (inside parks lit=no
+    outnumbers lit=yes 2-4x); the roads in _LIT_BY_DEFAULT and sidewalk or
+    crossing footways are lit; everything else (other footways, service roads,
+    steps, corridors, cycleways) is unknown."""
+    values = _values(lit)
+    if values:
+        return LIT_NO if "no" in values else LIT_YES
+    name = CLASS_NAMES[edge_class]
+    if flags & FLAG_IN_PARK or name in _UNLIT_BY_DEFAULT:
+        return LIT_NO
+    if name in _LIT_BY_DEFAULT or flags & FLAG_SIDEWALK:
+        return LIT_YES
+    return LIT_UNKNOWN
+
+
+def edge_multipliers(edge_class: np.ndarray, edge_flags: np.ndarray) -> np.ndarray:
+    """Class and flag factors of the cost, per edge."""
+    table = np.asarray([CLASS_MULTIPLIER[name] for name in CLASS_NAMES], dtype=np.float32)
+    # a class index written by a newer build than this code counts as "other"
+    mult = table[np.where(edge_class < len(table), edge_class, 0)]
+    mult[(edge_flags & FLAG_SIDEWALK) > 0] = SIDEWALK_MULTIPLIER
+    passage = np.ones_like(mult)
+    for flag, factor in ((FLAG_COVERED, COVERED_MULTIPLIER), (FLAG_INDOOR, INDOOR_MULTIPLIER),
+                         (FLAG_UNDERPASS, UNDERPASS_MULTIPLIER)):
+        passage = np.where((edge_flags & flag) > 0, np.maximum(passage, factor), passage)
+    park = np.where((edge_flags & FLAG_IN_PARK) > 0, IN_PARK_MULTIPLIER, 1.0)
+    return (mult * passage * park).astype(np.float32)
+
+
 def build_arrays(
     node_lng: Sequence[float],
     node_lat: Sequence[float],
-    edges: Iterable[tuple[int, int, Sequence[Sequence[float]], float, bool]],
+    edges: Iterable[Sequence[Any]],
     meta: dict[str, Any],
 ) -> dict[str, np.ndarray]:
-    """File arrays from undirected edges (u, v, coords from u to v, length_m, lit)."""
-    src, dst, length, lit = [], [], [], []
+    """File arrays (format 2) from undirected edges
+    (u, v, coords from u to v, length_m, lit[, edge_class[, edge_flags]]).
+    `lit` is LIT_NO / LIT_UNKNOWN / LIT_YES, or a bool (False unlit, True lit).
+    The class defaults to residential and the flags to 0."""
+    src, dst, length, lit, classes, flags = [], [], [], [], [], []
     cell_offsets, cells, geom_offsets, geom = [0], [], [0], []
-    for u, v, coords, length_m, is_lit in edges:
+    for u, v, coords, length_m, edge_lit, *rest in edges:
         src.append(u)
         dst.append(v)
         length.append(length_m)
-        lit.append(1 if is_lit else 0)
+        if isinstance(edge_lit, (bool, np.bool_)):
+            edge_lit = LIT_YES if edge_lit else LIT_NO
+        lit.append(int(edge_lit))
+        classes.append(int(rest[0]) if rest else CLASS_INDEX["residential"])
+        flags.append(int(rest[1]) if len(rest) > 1 else 0)
         cells.extend(edge_cells(coords))
         cell_offsets.append(len(cells))
         geom.extend(coords)
@@ -140,6 +332,8 @@ def build_arrays(
         "edge_dst": np.asarray(dst + src, dtype=np.int32),
         "edge_length": np.asarray(length + length, dtype=np.float32),
         "edge_lit": np.asarray(lit + lit, dtype=np.uint8),
+        "edge_class": np.asarray(classes + classes, dtype=np.uint8),
+        "edge_flags": np.asarray(flags + flags, dtype=np.uint8),
         "cell_offsets": np.asarray(cell_offsets, dtype=np.int32),
         "cells": np.asarray(cells, dtype=np.uint64),
         "geom_offsets": np.asarray(geom_offsets, dtype=np.int32),
@@ -161,6 +355,12 @@ def load_graph(path: str | Path) -> Graph:
     meta = json.loads(str(a.pop("meta")))
     src, dst = a["edge_src"], a["edge_dst"]
     n = len(a["node_lng"])
+    fmt = 2 if "edge_class" in a else 1
+    if fmt == 1:
+        a["edge_class"] = np.full(len(src), CLASS_INDEX["residential"], dtype=np.uint8)
+        a["edge_flags"] = np.zeros(len(src), dtype=np.uint8)
+    # arrays added by a later format are ignored by this code
+    a = {k: v for k, v in a.items() if k in Graph.__dataclass_fields__}
 
     unique_cells, cell_inverse = np.unique(a["cells"], return_inverse=True)
 
@@ -181,6 +381,8 @@ def load_graph(path: str | Path) -> Graph:
         **a,
         meta=meta,
         bbox=bbox,
+        format=fmt,
+        edge_multiplier=edge_multipliers(a["edge_class"], a["edge_flags"]),
         tree=cKDTree(_xy(lng, lat)),
         unique_cells=unique_cells,
         cell_inverse=cell_inverse.astype(np.int32),
@@ -235,17 +437,46 @@ def edge_baseline(graph: Graph, crime_rows: Iterable[Sequence[Any]]) -> np.ndarr
     return np.concatenate([undirected, undirected])
 
 
-def combined_risk(live: np.ndarray, baseline: np.ndarray | None) -> np.ndarray:
-    """1 - (1 - live) * (1 - k * baseline), the formula the cell scores use."""
+def night_multiplier(when: datetime) -> float:
+    """Factor on the crime baseline at `when` (REVISIT(night-multiplier), see the
+    constants). A datetime without a timezone is read as London local time."""
+    local = when.astimezone(LONDON_TZ) if when.tzinfo else when
+    h = local.hour + local.minute / 60 + local.second / 3600
+    if NIGHT_END_H <= h < NIGHT_START_H:
+        return 1.0
+    if h >= NIGHT_START_H or h < NIGHT_PEAK_H:
+        rise_h = NIGHT_PEAK_H + 24 - NIGHT_START_H
+        phase = ((h - NIGHT_START_H) % 24) / rise_h
+        return 1.0 + (NIGHT_PEAK - 1.0) * math.sin(math.pi / 2 * phase)
+    phase = (h - NIGHT_PEAK_H) / (NIGHT_END_H - NIGHT_PEAK_H)
+    return 1.0 + (NIGHT_PEAK - 1.0) * math.cos(math.pi / 2 * phase)
+
+
+def combined_risk(live: np.ndarray, baseline: np.ndarray | None, night: float = 1.0) -> np.ndarray:
+    """1 - (1 - live) * (1 - k * baseline), the formula the cell scores use, with
+    the baseline term multiplied by `night` (night_multiplier). Clamped to [0, 1]."""
     if baseline is None:
         return live
-    return 1.0 - (1.0 - live) * (1.0 - BASELINE_WEIGHT * baseline)
+    term = np.clip(BASELINE_WEIGHT * night * baseline, 0.0, 1.0)
+    return np.clip(1.0 - (1.0 - live) * (1.0 - term), 0.0, 1.0)
 
 
-def edge_costs(graph: Graph, risk: np.ndarray, alpha: float, beta: float) -> np.ndarray:
-    if alpha < 0 or not 0 <= beta < 1:
-        raise ValueError("alpha must be >= 0 and beta in [0, 1)")
-    costs = graph.edge_length.astype(np.float64) * (1.0 + alpha * risk) * (1.0 - beta * graph.edge_lit)
+def edge_costs(graph: Graph, risk: np.ndarray, alpha: float, beta: float = DEFAULT_BETA,
+               gamma: float = DEFAULT_GAMMA, plain: bool = False) -> np.ndarray:
+    """Format 2: length * (1 + alpha * risk) * edge_multiplier * (1 + gamma * (1 - lit01)).
+    Format 1: length * (1 + alpha * risk) * (1 - beta * lit).
+    `plain` gives the cost of the fast route: length only. Every factor is
+    positive, so costs are strictly positive."""
+    if alpha < 0 or not 0 <= beta < 1 or gamma < 0:
+        raise ValueError("alpha and gamma must be >= 0 and beta in [0, 1)")
+    length = graph.edge_length.astype(np.float64)
+    if plain:
+        costs = length
+    elif graph.format == 1:
+        costs = length * (1.0 + alpha * risk) * (1.0 - beta * graph.edge_lit)
+    else:
+        lit01 = graph.edge_lit.astype(np.float64) / LIT_YES
+        costs = length * (1.0 + alpha * risk) * graph.edge_multiplier * (1.0 + gamma * (1.0 - lit01))
     assert np.all(costs > 0), "edge costs must be strictly positive"
     return costs
 
@@ -291,6 +522,13 @@ def _edge_coords(graph: Graph, edge: int) -> np.ndarray:
     return coords[::-1] if edge >= m else coords
 
 
+def path_risk(risk: np.ndarray, length_m: np.ndarray) -> float:
+    """REVISIT(path-risk-score): placeholder score of a whole route in [0, 1),
+    1 - exp(-PATH_RISK_K * sum(risk * metres)). See PATH_RISK_K."""
+    exposure = float((np.asarray(risk, dtype=np.float64) * np.asarray(length_m, dtype=np.float64)).sum())
+    return 1.0 - math.exp(-PATH_RISK_K * exposure)
+
+
 def _describe(graph: Graph, edges: list[int], risk: np.ndarray) -> dict[str, Any]:
     coords: list[list[float]] = []
     for e in edges:
@@ -299,13 +537,29 @@ def _describe(graph: Graph, edges: list[int], risk: np.ndarray) -> dict[str, Any
     length = graph.edge_length[edges].astype(np.float64)
     r = risk[edges].astype(np.float64)
     total = float(length.sum())
+    flags = graph.edge_flags[edges]
+    main = np.isin(graph.edge_class[edges], [CLASS_INDEX[name] for name in MAIN_ROAD_CLASSES])
+    # format 1 files record only lit=yes, as the value 1
+    lit = graph.edge_lit[edges] == (LIT_YES if graph.format == 2 else 1)
     return {
         "geometry": {"type": "LineString", "coordinates": coords},
         "length_m": round(total, 1),
         "duration_min": round(total / WALK_SPEED_M_S / 60, 1),
         "mean_risk": round(float((length * r).sum() / total), 4),
         "max_risk": round(float(r.max()), 4),
+        "path_risk": round(path_risk(r, length), 4),
+        "lit_share": round(float(length[lit].sum() / total), 4),
+        # road centrelines only: a sidewalk mapped as its own way is a footway
+        "main_road_share": round(float(length[main].sum() / total), 4),
+        "park_m": round(float(length[(flags & FLAG_IN_PARK) > 0].sum()), 1),
+        "underpass_m": round(float(length[(flags & FLAG_UNDERPASS) > 0].sum()), 1),
     }
+
+
+# The fast search is first limited to this multiple of the straight-line distance
+# plus a constant, so a short request does not scan the whole graph
+FAST_SEARCH_FACTOR = 1.6
+FAST_SEARCH_EXTRA_M = 500.0
 
 
 def route(
@@ -316,21 +570,31 @@ def route(
     alpha: float = DEFAULT_ALPHA,
     beta: float = DEFAULT_BETA,
     baseline: np.ndarray | None = None,
+    gamma: float = DEFAULT_GAMMA,
+    depart_at: datetime | None = None,
 ) -> dict[str, Any]:
     """`cell_scores` are per-cell risk values; with a street-level `baseline`
     (edge_baseline) pass the cells' live component only, and the two are combined
-    per edge. `fast` minimises length; `safe` minimises length * (1 + alpha * risk) *
-    (1 - beta * lit). With alpha == 0 the lit term is not applied either, so both
-    routes are the same path."""
+    per edge, the baseline scaled by night_multiplier(depart_at) (1.0 without
+    `depart_at`). `fast` minimises length; `safe` minimises edge_costs. With
+    alpha == 0 the class and lit factors are not applied either, so both routes
+    are the same path."""
     source = snap(graph, origin, "origin")
     target = snap(graph, destination, "destination")
     if source == target:
         raise RouteError("origin and destination are at the same street node")
 
-    risk = combined_risk(edge_risk(graph, cell_scores), baseline)
-    fast_edges = _shortest_path(graph, edge_costs(graph, risk, 0.0, 0.0), source, target)
+    night = night_multiplier(depart_at) if depart_at is not None else 1.0
+    risk = combined_risk(edge_risk(graph, cell_scores), baseline, night)
+    fast_costs = edge_costs(graph, risk, 0.0, plain=True)
+    straight = float(np.hypot(*(graph.tree.data[source] - graph.tree.data[target])))
+    try:
+        fast_edges = _shortest_path(graph, fast_costs, source, target,
+                                    limit=straight * FAST_SEARCH_FACTOR + FAST_SEARCH_EXTRA_M)
+    except RouteError:
+        fast_edges = _shortest_path(graph, fast_costs, source, target)
     if alpha > 0:
-        safe_costs = edge_costs(graph, risk, alpha, beta)
+        safe_costs = edge_costs(graph, risk, alpha, beta, gamma)
         # the fast path is a feasible solution, so its cost bounds the search
         bound = float(safe_costs[fast_edges].sum()) * (1 + 1e-9)
         safe_edges = _shortest_path(graph, safe_costs, source, target, limit=bound)
@@ -339,12 +603,16 @@ def route(
 
     fast = _describe(graph, fast_edges, risk)
     safe = _describe(graph, safe_edges, risk)
-    reduction = 1 - safe["mean_risk"] / fast["mean_risk"] if fast["mean_risk"] > 0 else 0.0
+    # The safe route minimises cost, not mean risk, so its mean (and its maximum)
+    # can be above the fast route's; the reduction is reported as 0 then
+    reduction = max(0.0, 1 - safe["mean_risk"] / fast["mean_risk"]) if fast["mean_risk"] > 0 else 0.0
     return {
         "fast": fast,
         "safe": safe,
         "alpha": alpha,
-        "beta": beta,
+        "beta": beta if graph.format == 1 else 0.0,
+        "gamma": gamma if graph.format == 2 else 0.0,
+        "night_multiplier": round(night, 4),
         "risk_reduction": round(reduction, 4),
         "extra_distance_m": round(safe["length_m"] - fast["length_m"], 1),
         "attribution": graph.meta.get("attribution", ""),
