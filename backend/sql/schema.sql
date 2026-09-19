@@ -123,4 +123,5 @@ insert or ignore into sources (id, kind, poll_interval_s) values
   ('met_news', 'unstructured', 600),
   ('bbc_london', 'unstructured', 600),
   ('standard_london', 'unstructured', 600),
-  ('mylondon', 'unstructured', 600);
+  ('mylondon', 'unstructured', 600),
+  ('reddit_london', 'unstructured', 900);
