@@ -230,8 +230,9 @@ def backfill_police(month: str = "") -> dict[str, int]:
 
 # Greater London is downloaded from the public Overpass server in about 20 tiles
 # (two queries each, rate limited) and held unsimplified in memory before it is
-# simplified: the limits are estimates with a margin, see backend/tools/build_graph.py
-@app.function(volumes={GRAPH_DIR: graph_volume}, timeout=6 * 3600, memory=16384)
+# simplified. Measured: one central 12 km tile is 333k raw nodes and 1.9 GB peak;
+# the whole area is estimated at 6-8 times that. The limits include a margin.
+@app.function(volumes={GRAPH_DIR: graph_volume}, timeout=6 * 3600, memory=32768)
 def build_graph(bbox: str = "") -> dict[str, Any]:
     """Build the walking graph from OpenStreetMap into the graph Volume. Redeploy
     afterwards so the Store container loads the new file.
