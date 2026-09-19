@@ -40,11 +40,16 @@ create table if not exists events (
   confidence real not null check (confidence between 0 and 1),
   -- per-source confidence, used to recompute `confidence` on merge
   source_confidence text not null default '{}',
-  -- null = no decay while the upstream source still lists the event
-  half_life_min real,
+  -- one of models.Subtype, or null
+  subtype text,
   occurred_at text not null,
   expires_at text,
   ended_at text,
+  -- Lifecycle, see scoring.event_end. Databases created before these columns
+  -- existed get them from db._migrate_events (and keep an unused half_life_min).
+  is_ongoing integer not null default 0,
+  feed_managed integer not null default 0,
+  last_confirmed_at text,
   source_ids text not null,
   raw_item_ids text not null default '[]',
   urls text not null default '[]',
