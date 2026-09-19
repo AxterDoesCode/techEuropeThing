@@ -27,7 +27,7 @@ What the platform holds for a circle (radius 50–3000 m).
 }
 ```
 
-`london_percentile` = share of scored London cells with a lower score than this area's mean. `crime.top_categories` covers the three most frequent categories per street point, so it sums to slightly less than `recorded_crimes`. `crime.period` and `crime.method` say what the counts cover (both can be null); show the period next to any crime figure. The crime data has no time of day.
+`london_percentile` = share of scored London cells with a lower score than this area's mean. `crime.top_categories` covers the three most frequent categories per street point, so it sums to slightly less than `recorded_crimes`. `recorded_crimes`, `top_categories` and `top_streets` are police.uk records for ONE month, `crime.month`: label crime figures with that month. `crime.period` and `crime.method` (both can be null) describe the twelve-month Met Police data behind the modelled baseline (the risk scores and the heatmap), not those counts; mention them only where the modelled risk is explained. The crime data has no time of day.
 
 ## GET /api/hotels?lat=&lng=&radius_m=1500&sort=safety|distance
 

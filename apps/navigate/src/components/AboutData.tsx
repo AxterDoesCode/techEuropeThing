@@ -27,8 +27,9 @@ export function AboutData() {
       </button>
       <div id={id} className="about-panel" role="region" aria-label="About the data" hidden={!open}>
         <p>
-          Modelled risk combines current events (transport disruption, incidents reported by news and official sources)
-          with police-recorded crime for one recent month. Values run from 0 to 1 and are not probabilities.
+          Modelled risk combines current events (transport incidents, incidents reported by news and official sources)
+          with a baseline built from twelve months of Metropolitan Police recorded crime. Values run from 0 to 1 and
+          are not probabilities.
         </p>
         <p>The crime data has no time of day, so it does not distinguish night from day.</p>
         <p>The lower-risk route reduces the modelled risk along the walk; it cannot account for events that are not in the data.</p>
