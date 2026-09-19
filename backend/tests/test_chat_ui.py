@@ -329,3 +329,14 @@ def test_http_service_passes_the_context(monkeypatch):
     monkeypatch.setattr(chat, "answer", boom)
     resp = client.post("/api/chat", json=body)
     assert resp.status_code == 502 and "secret" not in resp.text and "detail" in resp.json()
+
+
+def test_crime_block_names_the_count_month_and_the_baseline_period_apart():
+    crime = {"month": "2026-07", "period": "2025-09..2026-08", "method": "m", "recorded_crimes": 73, "weighted": 20.0}
+    out = chat._crime_for_model(crime)
+    assert out["counts_month"] == "2026-07" and out["baseline_period"] == "2025-09..2026-08"
+    assert "month" not in out and "period" not in out and out["recorded_crimes"] == 73
+    assert "counts_month only" in out["note"]
+    assert chat._crime_for_model(None) is None
+    # older data without a period
+    assert chat._crime_for_model({"month": "2026-07"})["baseline_period"] is None
