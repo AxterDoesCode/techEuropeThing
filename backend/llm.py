@@ -31,8 +31,8 @@ from pydantic_ai.usage import RunUsage, UsageLimits
 
 from . import geocode as geocode_module
 from .geocode import GeoResult
-from .located import Article, located_event
-from .models import Category, Event, in_london, utcnow
+from .located import Article, adjusted_severity, located_event
+from .models import Category, Event, Subtype, in_london, utcnow
 from .scoring import distance_m
 
 MAX_TOOL_CALLS = 8
@@ -45,6 +45,8 @@ MAX_SIMILAR_EVENTS = 5
 # Search radius for follow-up reporting on an existing event
 MIN_SIMILAR_RADIUS_M = 500.0
 
+# REVISIT(severity-scale): the severity anchors at the end of this prompt are first
+# values from the product owner, not tuned. extract_rules.py uses the same anchors.
 SYSTEM_PROMPT = """\
 You extract incidents from one news article or police statement for a live map of \
 personal-safety risk for people walking in Greater London.
@@ -53,11 +55,26 @@ Output a list of incidents. The list is empty when the article describes none. O
 article can describe several separate incidents; output one item per incident.
 
 Include an incident only when all of these hold:
-- it is a specific event that happened recently or is still in progress (not a \
-historic case, anniversary or statistic);
+- it is a specific event with its own time and place (not an anniversary, a \
+statistic or commentary). Whether it is recent enough is decided by code from the \
+time fields below;
 - it happened at an identifiable place inside Greater London;
 - it affects the safety of someone walking nearby: violence, robbery, sexual offences, \
-disorder, fire, explosion, serious collision, flooding, a police cordon or evacuation.
+disorder, protest, fire, explosion, serious collision, flooding, a police cordon or evacuation.
+
+Time of the incident. Police appeals and news follow-ups are often published weeks or \
+years after the offence, and the publication time is not the incident time:
+- `occurred_at` is the date and time the incident itself happened (for an event in \
+progress: when it started), as stated in the article body. Call `fetch_article` when the \
+headline and description do not state it. Use 00:00 when only the date is given. Output \
+the item even when that date is long ago; code decides whether it is still relevant. \
+Null only when the article gives no date or time for the incident. Never copy the \
+publication time into it.
+- `is_recent`: true only when the text indicates that the incident happened within about \
+a day before publication or is in progress ("this morning", "last night", "officers \
+remain at the scene"). False when the text gives no such indication. When `occurred_at` \
+is null and `is_recent` is false the item is discarded.
+- `recency_reason`: the words of the article that justify `is_recent` and `occurred_at`.
 
 Reject: court outcomes, charges, trials, sentencing, inquests, police misconduct and \
 dismissals, policy, statistics, recruitment, awards, opinion and commentary.
@@ -83,18 +100,36 @@ Fields:
 closures), transit_disruption, flood, weather, other.
 - title: at most 120 characters, factual, names the place.
 - summary: one or two factual sentences.
-- occurred_at: ISO 8601 time of the incident if the article states it, else null.
-- is_ongoing: true while the scene is active (cordon in place, fire not out, suspect at large).
-- severity, from 0 to 1:
+- subtype: one of homicide, stabbing, shooting, sexual_assault, acid_attack, robbery, \
+assault, active_attack (marauding or terror attack), explosion, violent_disorder, \
+tense_protest, peaceful_protest, fire, theft, other. Null unless the article clearly \
+states it.
+- occurred_at, is_recent, recency_reason: see "Time of the incident".
+- is_ongoing: true only when the article says the event is in progress now: a protest \
+or disorder still under way, a fire not out, an attack in progress, a cordon or evacuation \
+in place. False for a one-off incident that is over (a stabbing, a robbery), also when \
+the investigation continues.
+- expected_end: ISO 8601 end time when the article states one (a march due to finish at \
+17:00), else null.
+- suspect_at_large: true when the article says a violent suspect has not been found.
+- resolved: true when the article says an arrest was made or the scene has been cleared, \
+and no danger remains.
+- false_alarm: true when the article says the incident was a false alarm, a hoax, or that \
+an all-clear was given. Such an item creates no event; set `existing_event_id` when it \
+refers to an event returned by `find_similar_events`, which is then ended.
+- severity, from 0 to 1. Use the anchor of the closest row; do not adjust it for \
+suspect_at_large or resolved, code does that:
   | Incident | severity |
-  | death, murder, fatal incident | 0.95 |
-  | stabbing, shooting, firearm, acid attack | 0.9 |
-  | rape, sexual assault, kidnap | 0.85 |
-  | assault, robbery, mugging | 0.7 |
-  | fire, explosion | 0.7 |
-  | disorder, protest, riot | 0.6 |
-  | collision, crash | 0.5 |
-  | burglary, theft, fraud | 0.4 |
+  | attack in progress, explosion, shooting in progress | 1.0 |
+  | homicide, shooting, stabbing with serious injury | 0.9 |
+  | sexual assault by a stranger, acid attack | 0.8 |
+  | armed robbery, serious assault | 0.7 |
+  | violent disorder, riot, large fire with evacuation | 0.6 |
+  | robbery without a weapon, collision | 0.5 |
+  | tense protest (police lines, scuffles) | 0.4 |
+  | large peaceful protest | 0.3 |
+  | theft or pickpocketing reports, small contained fire | 0.2 |
+  | informational | 0.1 |
 """
 
 
@@ -106,8 +141,18 @@ class ExtractedEvent(BaseModel):
     place_id: str
     place_text: str
     severity: float = Field(ge=0, le=1)
+    subtype: Subtype | None = None
+    # time of the incident from the article body, never the publication time
     occurred_at: datetime | None = None
+    # Required, without a default: the model has to decide it for every item. With
+    # occurred_at null, the publication time is used only when this is true.
+    is_recent: bool
+    recency_reason: str = ""
     is_ongoing: bool = False
+    expected_end: datetime | None = None
+    suspect_at_large: bool = False
+    resolved: bool = False
+    false_alarm: bool = False
     existing_event_id: str | None = None
 
 
@@ -363,7 +408,9 @@ def to_events(
 ) -> list[Event]:
     """Apply the code-side guardrails and build Events. Items whose place_id was
     not produced by the geocode tool in this run, or whose place is outside
-    Greater London, are dropped."""
+    Greater London, are dropped. So are items without an incident time that the
+    model did not mark as recent, items older than the hard cap of their kind
+    (located_event), and false alarms that refer to no existing event."""
     now = utcnow()
     events: list[Event] = []
     for item in extracted:
@@ -373,6 +420,13 @@ def to_events(
         occurred_at = _aware(item.occurred_at) if item.occurred_at else None
         if occurred_at is not None and occurred_at > now:
             occurred_at = None
+        if occurred_at is None and not item.is_recent:
+            continue
+        merge_into = _event_uuid(item.existing_event_id)
+        if item.false_alarm and merge_into is None:
+            continue
+        resolved = item.resolved or item.false_alarm
+        subtype = item.subtype.value if item.subtype not in (None, Subtype.OTHER) else None
         ref = f"{source_id}:{deps.article.guid}"
         ev = located_event(
             article=deps.article,
@@ -382,10 +436,14 @@ def to_events(
             category=item.category,
             title=item.title,
             summary=item.summary,
-            severity=item.severity,
+            severity=adjusted_severity(item.severity, item.suspect_at_large, resolved),
             place=place,
             occurred_at=occurred_at,
-            merge_into=_event_uuid(item.existing_event_id),
+            merge_into=merge_into,
+            subtype=subtype,
+            is_ongoing=item.is_ongoing and not resolved,
+            expires_at=_aware(item.expected_end) if item.expected_end else None,
+            resolution="false_alarm" if item.false_alarm else "resolved" if item.resolved else None,
         )
         if ev is not None:
             events.append(ev)

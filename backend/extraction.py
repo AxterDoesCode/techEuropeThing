@@ -10,7 +10,7 @@ import logging
 
 from . import extract_rules, llm
 from .geocode import geocode
-from .located import Article, located_event
+from .located import Article, adjusted_severity, located_event
 from .models import Event
 from .prefilter import is_incident_candidate
 
@@ -59,8 +59,12 @@ def extract_events(
 
 
 def extract_with_rules(article: Article, source_id: str, source_type: str) -> list[Event]:
-    extracted = extract_rules.extract(article.title, article.description)
+    extracted = extract_rules.extract(article.title, article.description, article.published_at)
     if extracted is None:
+        return []
+    # Without a stated incident date the publication time is used, but only when
+    # the text indicates a recent incident
+    if extracted.occurred_at is None and not extracted.is_recent:
         return []
     place = geocode(extracted.place_text)
     if place is None:
@@ -73,7 +77,10 @@ def extract_with_rules(article: Article, source_id: str, source_type: str) -> li
         category=extracted.category,
         title=article.title,
         summary=article.description,
-        severity=extracted.severity,
+        severity=adjusted_severity(extracted.severity, extracted.suspect_at_large, extracted.resolved),
         place=place,
+        occurred_at=extracted.occurred_at,
+        subtype=extracted.subtype,
+        is_ongoing=extracted.is_ongoing and not extracted.resolved,
     )
     return [ev] if ev else []
