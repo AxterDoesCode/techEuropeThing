@@ -1,7 +1,10 @@
-"""Metropolitan Police street-level crime records from data.police.uk.
+"""Street-level crime records from data.police.uk.
 
 Published monthly, about two months behind, with locations snapped to
-anonymised street points. Used as the baseline layer, not as live events.
+anonymised street points. One month of these records is too noisy to be the
+baseline by itself (month-to-month Spearman 0.21 per point). The baseline level
+of an area comes from 12 months of MPS LSOA counts (mps_lsoa.py); the records
+here only place that level on street points inside each LSOA.
 """
 
 from __future__ import annotations
@@ -25,23 +28,31 @@ TILE_LAT = 0.04
 MIN_TILE_DEG = 0.004
 WORKERS = 6
 
-# Relevance of each police.uk category to personal safety on the street
-CATEGORY_WEIGHT = {
-    "violent-crime": 1.0,
-    "robbery": 1.0,
-    "possession-of-weapons": 0.9,
-    "theft-from-the-person": 0.7,
-    "public-order": 0.6,
-    "anti-social-behaviour": 0.4,
-    "drugs": 0.4,
-    "criminal-damage-arson": 0.4,
-    "bicycle-theft": 0.3,
-    "vehicle-crime": 0.3,
-    "burglary": 0.3,
-    "other-theft": 0.3,
-    "shoplifting": 0.2,
-    "other-crime": 0.2,
-}
+# police.uk categories that describe a risk to a person walking on the street.
+# The others (shoplifting, burglary, vehicle crime, bicycle theft, other theft,
+# other crime, drugs, criminal damage, anti-social behaviour) are not counted.
+RELEVANT_CATEGORIES = frozenset({
+    "violent-crime",
+    "robbery",
+    "theft-from-the-person",
+    "possession-of-weapons",
+    "public-order",
+})
+
+# police.uk snaps a record to the nearest point of a fixed list, and part of that
+# list is venues where crimes are recorded rather than committed (a hospital, a
+# custody suite) or that are not the street. A point is dropped when its street
+# label contains one of these strings (case-insensitive).
+VENUE_LABELS = (
+    "hospital",
+    "police station",
+    "prison",
+    "supermarket",
+    "shopping area",
+    "petrol station",
+    "further/higher educational building",
+    "airport",
+)
 
 Bbox = tuple[float, float, float, float]  # west, south, east, north
 
@@ -92,7 +103,13 @@ def _fetch_tile(client: httpx.Client, tile: Bbox, month: str) -> list[dict[str, 
 
 
 def fetch_month(month: str | None = None, bbox: Bbox = LONDON_BBOX) -> tuple[str, list[dict[str, Any]]]:
-    """All crime records in the bbox for one month (default: latest published)."""
+    """All crime records in the bbox for one month (default: latest published).
+
+    The per-category endpoints (/crimes-street/{category}) would return less data,
+    but five categories need five times the requests (825 instead of about 180)
+    and their small responses arrive fast enough to exceed the 15 requests/s limit
+    (measured: 429 responses persisting through the retries). One all-crime pass
+    is 42 MB in about 30 s; aggregate_points filters the categories locally."""
     with httpx.Client(timeout=90) as client:
         month = month or latest_month(client)
         with ThreadPoolExecutor(WORKERS) as pool:
@@ -102,11 +119,20 @@ def fetch_month(month: str | None = None, bbox: Bbox = LONDON_BBOX) -> tuple[str
     return month, list(unique.values())
 
 
+def is_venue(street: str) -> bool:
+    label = street.lower()
+    return any(v in label for v in VENUE_LABELS)
+
+
 def aggregate_points(crimes: list[dict[str, Any]]) -> list[CrimePoint]:
-    """One entry per anonymised street point, with counts by category."""
+    """One entry per anonymised street point, with counts by category. Only
+    RELEVANT_CATEGORIES are counted and venue points (VENUE_LABELS) are dropped.
+    `weighted` is left at 0; mps_lsoa.distribute sets it."""
     points: dict[tuple[str, str], CrimePoint] = {}
     for c in crimes:
         loc = c["location"]
+        if c["category"] not in RELEVANT_CATEGORIES or is_venue(loc["street"]["name"]):
+            continue
         key = (loc["longitude"], loc["latitude"])
         lng, lat = float(key[0]), float(key[1])
         if not in_london(lng, lat):
@@ -115,7 +141,6 @@ def aggregate_points(crimes: list[dict[str, Any]]) -> list[CrimePoint]:
         if p is None:
             p = points[key] = CrimePoint(lng=lng, lat=lat, street=loc["street"]["name"])
         p.count += 1
-        p.weighted += CATEGORY_WEIGHT.get(c["category"], 0.2)
         p.categories[c["category"]] += 1
     return list(points.values())
 
@@ -134,14 +159,18 @@ def baseline_cells(points: list[CrimePoint], months: int, res: int = 9) -> dict[
     return {cell: min(1.0, v / cap) for cell, v in logs.items()}
 
 
-def points_payload(points: list[CrimePoint], month: str) -> dict[str, Any]:
+def points_payload(points: list[CrimePoint], month: str, extra: dict[str, Any] | None = None) -> dict[str, Any]:
     """Compact form for the client: one row per street point,
-    [lng, lat, count, weighted, street, {category: count} for the top 3]."""
+    [lng, lat, count, weighted, street, {category: count} for the top 3].
+
+    `month` is the police.uk month ("YYYY-MM", parsed by the client). `extra` adds
+    top-level fields (period, method) and cannot replace month, columns or rows."""
     return {
+        **(extra or {}),
         "month": month,
         "columns": ["lng", "lat", "count", "weighted", "street", "top_categories"],
         "rows": [
-            [p.lng, p.lat, p.count, round(p.weighted, 1), p.street, dict(p.categories.most_common(3))]
+            [p.lng, p.lat, p.count, round(p.weighted, 3), p.street, dict(p.categories.most_common(3))]
             for p in sorted(points, key=lambda p: p.weighted)
         ],
     }
