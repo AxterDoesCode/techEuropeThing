@@ -62,6 +62,8 @@ SOURCE_TYPE_CONFIDENCE = {
     "official_statement": 0.9,
     "news": 0.7,
     "manual": 0.5,
+    # A single social media post. Such events matter once they merge with other sources.
+    "social": 0.35,
 }
 
 

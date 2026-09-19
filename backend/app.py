@@ -8,6 +8,11 @@ restores the latest snapshot. At most that interval of writes is lost if the
 container is killed, and those writes are re-created by the next polls.
 
   modal run -m backend.app::poll_source --source-id tfl_road
+
+News extraction: `poll_source` fetches a feed, then starts one `extract_item`
+container per new pre-filter candidate (the LLM extraction agent, model from
+LLM_MODEL in the `london-risk` secret). `geocode_place` is a single container
+shared by all of them.
   modal run -m backend.app::backfill_police      latest month of Met crime data
   modal serve -m backend.app                     API with live reload
   modal deploy -m backend.app                    API + dispatcher and rescore crons
@@ -39,9 +44,11 @@ app = modal.App(APP_NAME, image=image)
 volume = modal.Volume.from_name("london-risk-db", create_if_missing=True)
 # Walking graph for /api/route, written by build_graph and read by the Store
 graph_volume = modal.Volume.from_name("london-risk-graph", create_if_missing=True)
-# Optional Modal secret `london-risk` (TFL_APP_KEY, LLM_MODEL and the provider key).
-# Deploy with LONDON_RISK_SECRET=1 once it exists; without it no secret is attached.
-secrets = [modal.Secret.from_name("london-risk")] if os.environ.get("LONDON_RISK_SECRET") else []
+# Modal secret `london-risk`: LLM_MODEL, GOOGLE_API_KEY, optionally TFL_APP_KEY. It
+# must be attached unconditionally: the module is imported again inside each
+# container, and a condition that differs there changes the function's
+# dependencies, which makes every container fail at start.
+secrets = [modal.Secret.from_name("london-risk")]
 
 VOLUME_DIR = "/data"
 SNAPSHOT_PATH = f"{VOLUME_DIR}/risk.sqlite"
@@ -142,6 +149,31 @@ class RemoteRepo:
         return lambda *args, **kwargs: deployed_store().call.remote(method, *args, **kwargs)
 
 
+# Extraction agents that run at the same time. Each article can make up to 8 LLM
+# requests, so this bounds the request rate against the provider's quota.
+EXTRACT_CONCURRENCY = int(os.environ.get("EXTRACT_CONCURRENCY", "4"))
+
+
+@app.function(max_containers=1, timeout=120)
+def geocode_place(place_text: str):
+    """All geocoding runs in this single container: the Nominatim limit of one
+    request per second is enforced per process, and results are cached in the database."""
+    from . import geocode
+
+    geocode.use_cache(RemoteRepo())
+    return geocode.geocode(place_text)
+
+
+@app.function(timeout=300, max_containers=EXTRACT_CONCURRENCY, secrets=secrets)
+def extract_item(source_id: str, raw):
+    """One extraction agent run: one news item -> (events, LLM requests)."""
+    from . import geocode
+    from .pipeline import SOURCES
+
+    geocode.use_remote(geocode_place.remote)
+    return SOURCES[source_id].to_events(raw, RemoteRepo())
+
+
 @app.function(timeout=900, max_containers=20, secrets=secrets)
 def poll_source(source_id: str) -> dict[str, int]:
     from . import geocode
@@ -149,7 +181,14 @@ def poll_source(source_id: str) -> dict[str, int]:
 
     repo = RemoteRepo()
     geocode.use_cache(repo)
-    counts = run_poll(SOURCES[source_id], repo)
+
+    def map_items(items):
+        # One container per item, EXTRACT_CONCURRENCY at a time. A failed item is
+        # reported as None: it stays pending and the next poll extracts it again.
+        results = extract_item.map([source_id] * len(items), items, return_exceptions=True)
+        return [None if isinstance(r, Exception) else r for r in results]
+
+    counts = run_poll(SOURCES[source_id], repo, map_items=map_items)
     print(source_id, counts)
     return counts
 

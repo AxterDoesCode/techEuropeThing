@@ -21,7 +21,7 @@ Priority order:
 | Agent runtime | Modal (scheduled functions + `asgi_app` for the API) |
 | Database | SQLite, hosted on Modal (decided 2026-09-19: no external database service). One `Store` container (`max_containers=1`) owns the file, serves the API, runs rescoring and executes all storage calls from the pollers. It works on container-local disk and writes a snapshot to a Modal Volume every 30 s and on shutdown, restoring it on start. At most 30 s of writes are lost on a crash, and the next polls re-create them. No PostGIS: spatial work is done in Python (shapely, H3), which is sufficient at hundreds of events |
 | Spatial key | H3. Events stored at resolution 10, scores aggregated at resolutions 9 (street level, ~175 m edge) and 7 (city level, ~1.2 km edge). H3 indexes computed in Python with `h3`, stored as `text` |
-| LLM | Provider-agnostic. Use `pydantic-ai`; model selected by env var, e.g. `LLM_MODEL=anthropic:claude-haiku-4-5`, `google-gla:gemini-2.5-flash`, `openai:gpt-...`. Output type is the Pydantic event model |
+| LLM | Gemini (decided 2026-09-19), through `pydantic-ai`: `LLM_MODEL=google:gemini-3.8-flash` and `GOOGLE_API_KEY` in the Modal secret `london-risk`. The provider stays a configuration value; no code depends on Gemini. The agents run on Modal: one `extract_item` container per news item |
 | Globe | deck.gl 9.4 on MapLibre GL JS **5.x** with `projection: globe`, `MapboxOverlay({interleaved: true})`. Verified 2026-09-19: hexagons, pitch and extrusion render correctly on the globe. MapLibre 6 must not be used: it removed `map.transform`, which deck.gl 9.4 reads, and every frame throws. Projection is `globe` below zoom 7 and `mercator` from zoom 7, switched in code: deck.gl's `HeatmapLayer` draws nothing under globe, and deck.gl rejects MapLibre's interpolated projection type. deck.gl `IconLayer` did not render in interleaved mode in testing; markers use `ScatterplotLayer`. Keyless basemaps: OpenFreeMap `dark` and `positron` (light mode) |
 | Backend | One backend: FastAPI in Python. No Express server |
 | Frontend | React + TypeScript + Vite |
@@ -43,6 +43,8 @@ Checked on 2026-09-19 from this machine.
 Not yet checked, worth adding if time allows: London Fire Brigade incident data (London Datastore), TfL JamCam locations (CCTV coverage proxy), OSM `lit=yes/no` tags (street lighting, from the same OSM extract used for routing), additional local RSS (Evening Standard, MyLondon).
 
 Considered and removed: GDELT doc API (dropped 2026-09-19 before being built: it only indexes articles after outlets publish them, so it is slower than polling the same outlets' RSS directly; London incident news comes from a small known set of outlets; rate limit of 1 request per 5 s); LondonAir air quality index (built, then removed on 2026-09-19: air quality does not change a walking route, so it is not a relevant risk signal here).
+
+Dropped 2026-09-19: GDELT. It only discovers articles (no text, city-level locations), so each hit still needs the extraction agent; the direct feeds (`met_news`, `bbc_london`, `standard_london`, `mylondon`) cover the same outlets sooner.
 
 Dropped from the Gemini spec: X/Twitter geo posts (no usable access), satellite night-light data (VIIRS resolution is ~500 m, useless per street), "Police CAD" (no public dispatch feed exists for London).
 
@@ -68,7 +70,7 @@ Modal cron: rescore (every 1 min)
    recompute cell_scores for cells touched by active events; expire dead events
 
 FastAPI (modal.asgi_app)
-   GET /api/cells, /api/events, /api/agents, /api/stream (SSE), POST /api/inject, POST /api/route
+   GET /api/cells, /api/events, /api/agents, /api/stream (SSE), POST /api/route
 
 React client
    MapLibre globe + deck.gl layers, polls or subscribes to /api/stream
@@ -79,7 +81,7 @@ A single dispatcher cron is used instead of one cron per source because Modal's 
 ### Agent types
 
 1. **Structured pollers** — TfL road (`tfl_road`), TfL station disruptions (`tfl_transit`), EA floods (`ea_floods`), police.uk (one-off `backfill_police`). Deterministic field mapping. No LLM. Open-Meteo is not built. A snapshot source ends events that leave its feed; an empty fetch ends nothing unless the source sets `empty_is_valid` (floods: no warnings is the normal state).
-2. **Extraction agents** — RSS, manual inject. Implemented so far: `met_news` with the code pre-filter, the geocoder, and a rule-based extractor (`extract_rules.py`: keyword category/severity, place from headline patterns, one incident per item) that is used while no LLM is configured. Met statements are published hours after the incident, so `met_news` events use a 24 h half-life instead of the category default. A tool-using LLM agent (`pydantic-ai`) with output type `list[ExtractedEvent]`; one article can describe zero, one or several incidents.
+2. **Extraction agents** — RSS news feeds, later social sources. Implemented so far: `met_news` with the code pre-filter, the geocoder, and a rule-based extractor (`extract_rules.py`: keyword category/severity, place from headline patterns, one incident per item) that is used while no LLM is configured. Met statements are published hours after the incident, so `met_news` events use a 24 h half-life instead of the category default. A tool-using LLM agent (`pydantic-ai`) with output type `list[ExtractedEvent]`; one article can describe zero, one or several incidents.
 
 ### Extraction agent
 
@@ -99,6 +101,10 @@ Guardrails enforced in code, not by the prompt:
 - Confidence = source-type confidence adjusted by geocode precision; never set by the model.
 - An event with no resolved `place_id` is discarded.
 - Every run records its tool calls and token counts in `agent_runs`.
+
+### Extraction on Modal
+
+`poll_source` fetches a feed, keeps the items that pass the headline pre-filter and are not yet extracted, and maps them over `extract_item`: one container per item, at most `EXTRACT_CONCURRENCY` (4) at a time, which bounds the request rate against the Gemini quota (up to 8 requests per item). `raw_items.extracted_with` records the extractor and payload hash, so an item is extracted once; an edited article or a change of extractor (rules to Gemini) makes it pending again. A failed item stays pending and is retried on the next poll. Sources with `requires_llm` never fall back to the keyword rules. All geocoding goes through `geocode_place`, a single container, so the Nominatim limit of 1 request per second holds across extraction containers.
 
 ### Geocoding
 
@@ -179,7 +185,6 @@ An incoming structured event is never folded into another row, including a news 
 | GET | `/api/events/{id}` | Full event with sources and URLs |
 | GET | `/api/agents` | Per source: enabled, interval, last run, last status, counts for the last hour |
 | GET | `/api/stream?since=` | SSE (`backend/api_stream.py`): `hello`, `event_upsert`, `event_end`, `cells_changed`, `agent_run`. Details below |
-| POST | `/api/inject` | `{text, source_label}` -> runs the unstructured pipeline on submitted text. For demos; events created this way carry `source_ids=['manual']` |
 | POST | `/api/route` | Phase 2. `{origin, destination, alpha}` -> `{fast, safe}` each with GeoJSON LineString, length, duration, mean and max risk |
 
 One response shape per endpoint, generated from the Pydantic models. Coordinates in API responses are always GeoJSON order `[lng, lat]`.
@@ -262,7 +267,6 @@ backend/
   routing.py        compact graph format, edge risk and costs, fast/safe shortest paths
   api_route.py      POST /api/route
   api_stream.py     GET /api/stream (SSE)
-  api_inject.py     POST /api/inject
   features.py       GeoJSON form of an event
   extraction.py     pre-filter, then LLM agent or rule-based extractor
   llm.py            pydantic-ai extraction agent, tools, guardrails
@@ -274,7 +278,7 @@ web/
 SPEC.md
 ```
 
-Optional Modal secret `london-risk`: `TFL_APP_KEY`, `LLM_MODEL` and the matching provider key. Deploy with `LONDON_RISK_SECRET=1` to attach it. No database credentials exist.
+Modal secret `london-risk` (required; attached unconditionally, because a condition that evaluates differently inside the container makes every container fail at start): `LLM_MODEL`, `GOOGLE_API_KEY`, optionally `TFL_APP_KEY`. No database credentials exist.
 
 ## 12. Build order
 
@@ -284,7 +288,7 @@ Optional Modal secret `london-risk`: `TFL_APP_KEY`, `LLM_MODEL` and the matching
 4. Frontend globe with hexagon and event layers reading the live API.
 5. Remaining structured pollers (TfL lines/stops, EA floods). Dispatcher cron. `/api/agents` and the fleet panel.
 6. police.uk baseline backfill (one-off job, 12 months, tiled over the bbox with `poly=`).
-7. Extraction agent path: pre-filter, geocode tool, `fetch_article`, `find_similar_events`, merge. Sources: the Met feed (built), then BBC London and other direct RSS feeds. `/api/inject`.
+7. Extraction agent path: pre-filter, geocode tool, `fetch_article`, `find_similar_events`, BBC RSS source, merge, the Met feed.
 8. SSE, time slider, visual polish.
 9. Phase 2 routing.
 10. Stretch: corroboration agent, LFB data, lighting.

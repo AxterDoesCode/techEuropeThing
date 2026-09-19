@@ -20,13 +20,27 @@ log = logging.getLogger(__name__)
 llm_failures = 0
 
 
+class ExtractionFailed(RuntimeError):
+    """The LLM run failed and the source does not allow the rule-based fallback."""
+
+
+def extractor_id() -> str:
+    """Name of the extractor in use: the LLM model, or "rules". Stored with each
+    extracted item so that switching extractor re-processes the items still in a feed."""
+    return llm.get_model_name() if llm.is_configured() else "rules"
+
+
 def extract_events(
     article: Article,
     source_id: str,
     source_type: str,
     lookup: llm.SimilarEventLookup | None = None,
+    rules_fallback: bool = True,
 ) -> tuple[list[Event], int]:
-    """Returns the events and the number of LLM requests made for this article."""
+    """Returns the events and the number of LLM requests made for this article.
+
+    When the LLM run fails, the rule-based extractor is used if `rules_fallback`
+    is set; otherwise ExtractionFailed is raised so the caller can retry later."""
     global llm_failures
     if not is_incident_candidate(article.title, article.description):
         return [], 0
@@ -37,6 +51,8 @@ def extract_events(
     extracted, usage, error = llm.run_counted(deps)
     if extracted is None:
         llm_failures += 1
+        if not rules_fallback:
+            raise ExtractionFailed(f"{source_id}:{article.guid}: {error!r}")
         log.warning("LLM extraction failed for %s:%s (%r); using rules", source_id, article.guid, error)
         return extract_with_rules(article, source_id, source_type), usage.requests
     return llm.to_events(extracted, deps, source_id, source_type), usage.requests

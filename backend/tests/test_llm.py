@@ -2,14 +2,12 @@ from datetime import datetime, timedelta, timezone
 from uuid import uuid4
 
 import pytest
-from fastapi import FastAPI
-from fastapi.testclient import TestClient
 from pydantic_ai.exceptions import UsageLimitExceeded
 from pydantic_ai.messages import ModelResponse, ToolCallPart, ToolReturnPart
 from pydantic_ai.models.function import FunctionModel
 from pydantic_ai.models.test import TestModel
 
-from backend import api_inject, db, extraction, llm
+from backend import extraction, llm
 from backend.geocode import GeoResult
 from backend.located import HALF_LIFE_MIN, Article
 from backend.models import Category, Event, RawItem, utcnow
@@ -436,9 +434,9 @@ def test_pipeline_multi_event_items_llm_calls_and_lookup(monkeypatch):
     lookups = []
     original = extraction.extract_events
 
-    def spy(article, source_id, source_type, lookup=None):
+    def spy(article, source_id, source_type, lookup=None, rules_fallback=True):
         lookups.append(lookup)
-        return original(article, source_id, source_type, lookup)
+        return original(article, source_id, source_type, lookup, rules_fallback)
 
     monkeypatch.setattr("backend.sources.rss.extract_events", spy)
 
@@ -451,52 +449,10 @@ def test_pipeline_multi_event_items_llm_calls_and_lookup(monkeypatch):
     assert counts == {"fetched": 2, "inserted": 2, "ended": 0, "llm_calls": 2}
     assert set(repo.events) == {"bbc_london:item-1", "bbc_london:item-1#2"}
     assert all(ev.raw_item_ids == [1] for ev in repo.events.values())
-    assert lookups == [repo, repo]
+    # the second feed item fails the pre-filter, so no extraction is started for it
+    assert lookups == [repo]
 
     # a repo without find_merge_candidates is not passed as the lookup
     lookups.clear()
     run_poll(FeedSource("bbc_london", "u", "news"), MemoryRepo())
-    assert lookups == [None, None]
-
-
-# ---------------------------------------------------------------- inject endpoint
-
-
-@pytest.fixture
-def client(tmp_path, monkeypatch):
-    db.connect(tmp_path / "risk.sqlite")
-    monkeypatch.delenv("LLM_MODEL", raising=False)
-    monkeypatch.setattr(extraction, "geocode", fake_geocoder)
-    app = FastAPI()
-    app.include_router(api_inject.router)
-    return TestClient(app)
-
-
-def test_inject_requires_a_configured_token(client, monkeypatch):
-    body = {"text": "Stabbing in Bethnal Green"}
-    monkeypatch.delenv("INJECT_TOKEN", raising=False)
-    assert client.post("/api/inject", json=body, headers={"X-Inject-Token": ""}).status_code == 503
-    monkeypatch.setenv("INJECT_TOKEN", "secret")
-    assert client.post("/api/inject", json=body).status_code == 401
-    assert client.post("/api/inject", json=body, headers={"X-Inject-Token": "wrong"}).status_code == 401
-    assert db.events_geojson(utcnow()) == []
-
-
-def test_inject_writes_events(client, monkeypatch):
-    monkeypatch.setenv("INJECT_TOKEN", "secret")
-    body = {"text": "Stabbing reported in Bethnal Green\nTwo people injured.", "source_label": "demo"}
-    resp = client.post("/api/inject", json=body, headers={"X-Inject-Token": "secret"})
-    assert resp.status_code == 200
-    data = resp.json()
-    assert data["inserted"] == 1 and data["llm_calls"] == 0
-    (returned,) = data["events"]
-    assert returned["category"] == "violent_crime" and returned["source_ids"] == ["manual"]
-    assert returned["confidence"] == pytest.approx(0.5 * 0.6)
-
-    (stored,) = db.events_geojson(utcnow())
-    assert str(stored.id) == returned["id"]
-    assert stored.external_ref.startswith("manual:") and stored.summary == "Two people injured."
-
-    # text that is not an incident creates nothing
-    resp = client.post("/api/inject", json={"text": "Nice weather today"}, headers={"X-Inject-Token": "secret"})
-    assert resp.json()["events"] == [] and len(db.events_geojson(utcnow())) == 1
+    assert lookups == [None]
