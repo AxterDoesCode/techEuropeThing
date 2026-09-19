@@ -93,3 +93,8 @@ html, body, #root, .app { height: 100%; margin: 0; }
   .header, .left { width: calc(100% - 24px); }
   .left { top: auto; height: 45%; }
 }
+
+.stream-status { margin-left: auto; font-size: 11px; color: var(--muted); border: 1px solid var(--border); border-radius: 10px; padding: 1px 8px; }
+.stream-status::before { content: ''; display: inline-block; width: 6px; height: 6px; border-radius: 50%; margin-right: 5px; background: #f5a524; vertical-align: 1px; }
+.stream-status.live::before { background: #30a46c; }
+.feed li.new { box-shadow: inset 3px 0 0 var(--accent); }

@@ -171,11 +171,29 @@ A new event merges into an existing one when: same category group, centroids wit
 | GET | `/api/events?bbox=&since=&category=&active=true` | GeoJSON FeatureCollection; properties include current `risk` |
 | GET | `/api/events/{id}` | Full event with sources and URLs |
 | GET | `/api/agents` | Per source: enabled, interval, last run, last status, counts for the last hour |
-| GET | `/api/stream` | SSE: `event_upsert`, `event_end`, `cells_changed`, `agent_run`. Implemented by polling `updated_at` every 2 s server-side. Client falls back to polling if Modal closes long connections |
+| GET | `/api/stream?since=` | SSE (`backend/api_stream.py`): `hello`, `event_upsert`, `event_end`, `cells_changed`, `agent_run`. Details below |
 | POST | `/api/inject` | `{text, source_label}` -> runs the unstructured pipeline on submitted text. For demos; events created this way carry `source_ids=['manual']` |
 | POST | `/api/route` | Phase 2. `{origin, destination, alpha}` -> `{fast, safe}` each with GeoJSON LineString, length, duration, mean and max risk |
 
 One response shape per endpoint, generated from the Pydantic models. Coordinates in API responses are always GeoJSON order `[lng, lat]`.
+
+### `/api/stream`
+
+Each message is `event: <type>`, `id: <mark>`, `data: <one line of JSON>`. The mark is the high-water timestamp of the rows sent so far (largest `events.updated_at`, `agent_runs.finished_at` or `cell_scores.updated_at`, taken from the stored values, not from the clock).
+
+| `event:` | `data:` |
+| :--- | :--- |
+| `hello` | `{server_time, mark}`; first message of every connection |
+| `event_upsert` | GeoJSON Feature, same shape as an item of `/api/events`, with current `risk` |
+| `event_end` | `{id}`; the event has `ended_at` set or its risk is below 0.05 |
+| `cells_changed` | `{updated_at}`; `cell_scores` were rewritten (every rescore) |
+| `agent_run` | `{id, source_id, finished_at, fetched, inserted, ended, error}` |
+
+- The server reads `db.changes_since(mark)` every 2 s per connection (SQLite has no change notification). The endpoint is a coroutine; only the query runs in the threadpool, so an idle stream holds no thread. A comment line `: ping` is sent after 15 s without output.
+- Resume: the `Last-Event-ID` header (sent by EventSource on its own reconnects) takes precedence over `?since=<ISO timestamp>`; without either the stream starts at the current time. The start is limited to the last 15 minutes. Every read starts 10 s before the mark, because writers assign timestamps before their transaction (on Modal before the RPC to the Store), and rows already sent on the connection are skipped. A reconnecting client can therefore receive a message twice; all messages are idempotent.
+- The server closes each connection after 10 minutes: Modal limits request duration and every open stream occupies one of the Store container's 100 concurrent input slots. EventSource reconnects and resumes from `Last-Event-ID`.
+- Risk decay does not write a row, so an event whose risk falls below 0.05 by time alone is not reported; the client reloads `/api/events` every 5 minutes while connected.
+- `text/event-stream` is in Starlette's `GZipMiddleware` default exclusion list, so the stream is not compressed or buffered.
 
 ## 9. Frontend
 
@@ -190,7 +208,8 @@ One response shape per endpoint, generated from the Pydantic models. Coordinates
 - The H3 cell scores are still computed server-side (`cell_scores`, used by routing) but are no longer drawn. `/api/cells` remains available.
 - Clicking a marker or line opens a MapLibre popup at the event (details, sources, links); `closeOnClick` is disabled because the selecting click would also close it. Clicking empty map closes the popup and copies the clicked position into the coordinate fields.
 - Panels: position (cursor longitude/latitude on hover, editable fields + Go to move the map), layers (crime toggle, colour scale), event feed (sorted by risk, click flies to the event and opens its popup), agent fleet (hidden until `/api/agents` has data).
-- Not built yet: SSE, time slider, category filters.
+- Live updates (`web/src/useLiveEvents.ts`): initial load from `/api/events`, then an `EventSource` on `/api/stream` applies `event_upsert` / `event_end` to the list and reloads `/api/agents` on `agent_run`. When the stream has been down for more than 10 s the client polls `/api/events` every 15 s until the stream is open again, and reloads once after a long interruption. Ended events are removed from the list in both modes. The header shows `live` or `polling`; events that arrived after the initial load are marked in the feed for 60 s. Without `VITE_API_BASE` (static sample files) no stream is opened.
+- Not built yet: time slider, category filters.
 
 ## 10. Phase 2: routing
 

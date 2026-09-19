@@ -427,3 +427,65 @@ def latest_crime_points_json() -> str | None:
     with _tx() as conn:
         row = conn.execute("select payload from crime_points order by month desc limit 1").fetchone()
     return row["payload"] if row else None
+
+
+# Only the newest agent_runs ids are examined, so the query needs no index on finished_at
+_RUN_SCAN_ROWS = 200
+
+
+def changes_since(since: datetime, limit: int = 500) -> dict[str, Any]:
+    """Rows written after `since`, for the SSE stream (api_stream.py).
+
+    Returns:
+      events            Event objects with updated_at > since, oldest change first,
+                        ended ones included
+      event_updated_at  event id -> updated_at text, for de-duplication by the caller
+      runs              agent_runs rows with finished_at > since, oldest first
+      cells_updated_at  max(cell_scores.updated_at) if it is > since, else None
+      truncated         True when the event list was cut at `limit`
+      mark              the largest timestamp returned (fixed-width `_ts` text), or
+                        `since` when nothing changed; pass it as the next `since`
+
+    The mark comes from the stored values and not from the clock, so a row written
+    in the same instant as this call is returned by the next call. When the event
+    list is cut at `limit`, all rows sharing the last updated_at are still included
+    (one upsert batch writes a single timestamp) and the mark is that timestamp, so
+    the next call continues from there; runs may then be returned twice.
+    """
+    since_ts = _ts(since)
+    with _tx() as conn:
+        rows = conn.execute(
+            "select * from events where updated_at > ? order by updated_at, id limit ?",
+            [since_ts, limit],
+        ).fetchall()
+        truncated = len(rows) == limit
+        if truncated:
+            have = {r["id"] for r in rows}
+            rows += [
+                r
+                for r in conn.execute("select * from events where updated_at = ?", [rows[-1]["updated_at"]])
+                if r["id"] not in have
+            ]
+        runs = conn.execute(
+            """
+            select id, source_id, finished_at, fetched, inserted, ended, error from agent_runs
+            where id > (select coalesce(max(id), 0) from agent_runs) - ? and finished_at > ?
+            order by finished_at, id
+            """,
+            [_RUN_SCAN_ROWS, since_ts],
+        ).fetchall()
+        cells_ts = conn.execute("select max(updated_at) from cell_scores").fetchone()[0]
+    if cells_ts is not None and cells_ts <= since_ts:
+        cells_ts = None
+    if truncated:
+        mark = rows[-1]["updated_at"]
+    else:
+        mark = max([since_ts, cells_ts or "", *(r["updated_at"] for r in rows), *(r["finished_at"] for r in runs)])
+    return {
+        "events": [_event_from_row(r) for r in rows],
+        "event_updated_at": {r["id"]: r["updated_at"] for r in rows},
+        "runs": [dict(r) for r in runs],
+        "cells_updated_at": cells_ts,
+        "truncated": truncated,
+        "mark": mark,
+    }

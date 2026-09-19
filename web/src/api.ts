@@ -2,7 +2,7 @@ import type { AgentStatus, CrimePoints, EventCollection } from './types'
 
 // Without VITE_API_BASE the client reads the static files written by
 // `python -m backend.tools.export_sample web/public/sample`.
-const API_BASE = import.meta.env.VITE_API_BASE as string | undefined
+export const API_BASE = import.meta.env.VITE_API_BASE as string | undefined
 
 async function getJson<T>(url: string): Promise<T> {
   const resp = await fetch(url)
