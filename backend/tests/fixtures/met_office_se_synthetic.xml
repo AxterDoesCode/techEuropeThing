@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SYNTHETIC test fixture. The item structure is that of the archived feed of
+     2026-08-12 (met_office_se_archived_20260812.xml); the warnings are invented.
+     Contents: one amber warning over three days including New Year (one item per
+     day, same id), one yellow warning that names Greater London, one red warning
+     for Kent only, and one item with an unexpected title that must be skipped. -->
+<rss xmlns:dc="http://purl.org/dc/elements/1.1/" version="2.0">
+    <channel>
+        <title>Met Office warnings for London &amp; South East England</title>
+        <link>https://www.metoffice.gov.uk/weather/warnings-and-advice/uk-warnings</link>
+        <description>Weather warnings of severe and extreme weather from the Met Office</description>
+        <language>en-gb</language>
+        <copyright>(c) Crown copyright</copyright>
+        <pubDate>Wed, 30 Dec 2026 09:00:00 GMT</pubDate>
+        <dc:creator>webteam@metoffice.gov.uk</dc:creator>
+        <item>
+            <title>Amber warning of wind affecting London &amp; South East England</title>
+            <link>https://www.metoffice.gov.uk/weather/warnings-and-advice/uk-warnings#?date=2026-12-31&amp;id=11111111-aaaa-4bbb-8ccc-222222222222&amp;referrer=rss</link>
+            <description>Amber warning of wind affecting London &amp; South East England: Greater London, Kent, Surrey valid from 0000 Thu 31 Dec to 2359 Thu 31 Dec</description>
+            <guid isPermaLink="false">https://www.metoffice.gov.uk/weather/warnings-and-advice/uk-warnings#?date=2026-12-31&amp;id=11111111-aaaa-4bbb-8ccc-222222222222&amp;referrer=rss&amp;region=London &amp; South East England</guid>
+            <enclosure length="16098" type="image/png" url="https://data.consumer-digital.api.metoffice.gov.uk/v1/warnings/rss/image/amber-wind.png"/>
+        </item>
+        <item>
+            <title>Amber warning of wind affecting London &amp; South East England</title>
+            <link>https://www.metoffice.gov.uk/weather/warnings-and-advice/uk-warnings#?date=2026-12-30&amp;id=11111111-aaaa-4bbb-8ccc-222222222222&amp;referrer=rss</link>
+            <description>Amber warning of wind affecting London &amp; South East England: Greater London, Kent, Surrey valid from 1800 Wed 30 Dec to 2359 Wed 30 Dec</description>
+            <guid isPermaLink="false">https://www.metoffice.gov.uk/weather/warnings-and-advice/uk-warnings#?date=2026-12-30&amp;id=11111111-aaaa-4bbb-8ccc-222222222222&amp;referrer=rss&amp;region=London &amp; South East England</guid>
+            <enclosure length="16098" type="image/png" url="https://data.consumer-digital.api.metoffice.gov.uk/v1/warnings/rss/image/amber-wind.png"/>
+        </item>
+        <item>
+            <title>Amber warning of wind affecting London &amp; South East England</title>
+            <link>https://www.metoffice.gov.uk/weather/warnings-and-advice/uk-warnings#?date=2026-12-31&amp;id=11111111-aaaa-4bbb-8ccc-222222222222&amp;referrer=rss&amp;day=2</link>
+            <description>Amber warning of wind affecting London &amp; South East England: Greater London, Kent, Surrey valid from 0000 Fri 1 Jan to 0600 Fri 1 Jan</description>
+            <guid isPermaLink="false">synthetic-third-day</guid>
+        </item>
+        <item>
+            <title>Yellow warning of rain affecting London &amp; South East England</title>
+            <link>https://www.metoffice.gov.uk/weather/warnings-and-advice/uk-warnings#?date=2026-12-30&amp;id=33333333-aaaa-4bbb-8ccc-444444444444&amp;referrer=rss</link>
+            <description>Yellow warning of rain affecting London &amp; South East England: Greater London, Windsor and Maidenhead valid from 0600 Wed 30 Dec to 1500 Wed 30 Dec</description>
+            <guid isPermaLink="false">synthetic-yellow</guid>
+        </item>
+        <item>
+            <title>Red warning of snow and ice affecting London &amp; South East England</title>
+            <link>https://www.metoffice.gov.uk/weather/warnings-and-advice/uk-warnings#?date=2026-12-30&amp;id=55555555-aaaa-4bbb-8ccc-666666666666&amp;referrer=rss</link>
+            <description>Red warning of snow and ice affecting London &amp; South East England: Kent, Medway valid from 0300 Wed 30 Dec to 1200 Wed 30 Dec</description>
+            <guid isPermaLink="false">synthetic-red-kent</guid>
+        </item>
+        <item>
+            <title>Service message</title>
+            <link>https://www.metoffice.gov.uk/weather/warnings-and-advice/uk-warnings</link>
+            <description>Not a warning</description>
+        </item>
+    </channel>
+</rss>

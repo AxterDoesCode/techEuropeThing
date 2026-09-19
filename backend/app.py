@@ -197,6 +197,17 @@ def poll_source(source_id: str) -> dict[str, int]:
     return counts
 
 
+@app.function(timeout=120, max_containers=1)
+def poll_alerts() -> dict[str, Any]:
+    """Met Office warnings and UK Emergency Alerts -> `alerts` table. Started by the
+    dispatcher every alerts.POLL_INTERVAL_S seconds."""
+    from . import alerts
+
+    result = alerts.poll(RemoteRepo())
+    print("alerts", result)
+    return result
+
+
 @app.function(schedule=modal.Cron("* * * * *"), secrets=secrets)
 def dispatcher() -> None:
     from .models import utcnow
@@ -205,6 +216,11 @@ def dispatcher() -> None:
     for source_id in RemoteRepo().due_sources(utcnow()):
         if is_pollable(source_id):
             poll_source.spawn(source_id)
+    # Official alert feeds (backend/alerts.py); they are not rows of `sources`
+    from . import alerts
+
+    if RemoteRepo().claim_alerts_poll(utcnow(), alerts.POLL_INTERVAL_S, list(alerts.SOURCES)):
+        poll_alerts.spawn()
 
 
 @app.function(schedule=modal.Cron("* * * * *"), timeout=120)
