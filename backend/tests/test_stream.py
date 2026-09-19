@@ -81,6 +81,9 @@ def _event(**kw) -> Event:
         confidence=0.8,
         occurred_at=datetime(2026, 1, 1, 12, 0, tzinfo=timezone.utc),
         source_ids=["tfl_road"],
+        feed_managed=True,
+        is_ongoing=True,
+        last_confirmed_at=datetime(2026, 1, 1, 12, 0, tzinfo=timezone.utc),
     )
     return Event.model_validate(base | kw)
 
@@ -88,13 +91,22 @@ def _event(**kw) -> Event:
 def test_change_frames_exact_output():
     now = datetime(2026, 1, 1, 13, 0, tzinfo=timezone.utc)
     live = _event()
-    ended = _event(id="00000000-0000-0000-0000-000000000002", ended_at=now)
-    decayed = _event(id="00000000-0000-0000-0000-000000000003", half_life_min=1)
+    # ended 50 min ago: 0.4 * 0.5 ** (50 / 15) is below MIN_EVENT_RISK
+    ended = _event(id="00000000-0000-0000-0000-000000000002", ended_at=now - timedelta(minutes=50))
+    # a one-off incident past the hard cap of its kind
+    decayed = _event(
+        id="00000000-0000-0000-0000-000000000003", category="other", feed_managed=False, is_ongoing=False,
+        occurred_at=now - timedelta(hours=7),
+    )
+    # ended 5 min ago: still has a residual risk, so it stays on the map
+    residual = _event(id="00000000-0000-0000-0000-000000000004", ended_at=now - timedelta(minutes=5))
     run = {"id": 7, "source_id": "tfl_road", "finished_at": "2026-01-01T13:00:00.000000+00:00",
            "fetched": 3, "inserted": 1, "ended": 1, "error": None}
     changes = {
-        "events": [live, ended, decayed],
-        "event_updated_at": {str(e.id): "2026-01-01T12:59:59.000000+00:00" for e in (live, ended, decayed)},
+        "events": [live, ended, decayed, residual],
+        "event_updated_at": {
+            str(e.id): "2026-01-01T12:59:59.000000+00:00" for e in (live, ended, decayed, residual)
+        },
         "runs": [run],
         "cells_updated_at": "2026-01-01T12:59:58.000000+00:00",
         "truncated": False,
@@ -111,14 +123,20 @@ def test_change_frames_exact_output():
         "properties": {
             "id": str(live.id), "external_ref": "tfl_road:X", "category": "road_closure",
             "title": "A1 closed", "summary": None, "lng": -0.1, "lat": 51.5, "radius_m": 100.0,
-            "severity": 0.5, "confidence": 0.8, "half_life_min": None,
+            "severity": 0.5, "confidence": 0.8, "subtype": None,
             "occurred_at": "2026-01-01T12:00:00Z", "expires_at": None, "ended_at": None,
-            "source_ids": ["tfl_road"], "urls": [], "risk": 0.4,
+            "is_ongoing": True, "feed_managed": True, "last_confirmed_at": "2026-01-01T12:00:00Z",
+            "source_ids": ["tfl_road"], "urls": [],
+            "state": "ongoing", "ongoing": True, "half_life_min": None, "risk": 0.4,
         },
     }
     assert frames[0].startswith(f"event: event_upsert\nid: {mark}\ndata: ") and frames[0].endswith("\n\n")
     assert json.loads(frames[0].split("data: ", 1)[1]) == feature
     assert frames[0].count("\n") == 4  # the JSON is on one line
+    upsert = json.loads(frames[3].split("data: ", 1)[1])
+    assert frames[3].startswith("event: event_upsert\n") and upsert["id"] == str(residual.id)
+    assert upsert["properties"]["state"] == "ended" and 0.05 < upsert["properties"]["risk"] < 0.4
+    del frames[3]
     assert frames[1:] == [
         f'event: event_end\nid: {mark}\ndata: {{"id":"{ended.id}"}}\n\n',
         f'event: event_end\nid: {mark}\ndata: {{"id":"{decayed.id}"}}\n\n',

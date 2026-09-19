@@ -203,6 +203,17 @@ def poll_source(source_id: str) -> dict[str, int]:
     return counts
 
 
+@app.function(timeout=120, max_containers=1)
+def poll_alerts() -> dict[str, Any]:
+    """Met Office warnings and UK Emergency Alerts -> `alerts` table. Started by the
+    dispatcher every alerts.POLL_INTERVAL_S seconds."""
+    from . import alerts
+
+    result = alerts.poll(RemoteRepo())
+    print("alerts", result)
+    return result
+
+
 @app.function(schedule=modal.Cron("* * * * *"), secrets=secrets)
 def dispatcher() -> None:
     from .models import utcnow
@@ -211,6 +222,11 @@ def dispatcher() -> None:
     for source_id in RemoteRepo().due_sources(utcnow()):
         if is_pollable(source_id):
             poll_source.spawn(source_id)
+    # Official alert feeds (backend/alerts.py); they are not rows of `sources`
+    from . import alerts
+
+    if RemoteRepo().claim_alerts_poll(utcnow(), alerts.POLL_INTERVAL_S, list(alerts.SOURCES)):
+        poll_alerts.spawn()
 
 
 @app.function(schedule=modal.Cron("* * * * *"), timeout=120)
@@ -218,19 +234,21 @@ def rescore() -> None:
     print("cells written:", deployed_store().rescore.remote())
 
 
-@app.function(timeout=900)
+@app.function(volumes={GRAPH_DIR: graph_volume}, timeout=900, memory=4096)
 def backfill_police(month: str = "") -> dict[str, int]:
-    """Load one month of police.uk data (default: latest) as the baseline layer."""
+    """Load the crime baseline: 12 months of MPS LSOA counts per km of walkable
+    street, placed on the police.uk street points of one month (default: latest).
+    Reads the routing graph for street lengths; run build_graph first, otherwise
+    every LSOA is normalised by area (mps_lsoa module docstring)."""
     from .scoring import FINE_RES
-    from .sources import police_uk
+    from .sources import mps_lsoa
 
-    resolved, crimes = police_uk.fetch_month(month or None)
-    points = police_uk.aggregate_points(crimes)
+    result = mps_lsoa.build(mps_lsoa.load_graph_if_present(GRAPH_PATH), month or None)
     repo = RemoteRepo()
-    repo.replace_baseline(police_uk.baseline_cells(points, months=1, res=FINE_RES), FINE_RES)
-    repo.save_crime_points(resolved, police_uk.points_payload(points, resolved))
-    counts = {"crimes": len(crimes), "points": len(points)}
-    print(resolved, counts)
+    repo.replace_baseline(result.cells(FINE_RES), FINE_RES)
+    repo.save_crime_points(result.month, result.payload())
+    counts = {k: v for k, v in result.stats.items() if isinstance(v, int)}
+    print(result.period, result.month, result.stats)
     return counts
 
 

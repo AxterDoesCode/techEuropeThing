@@ -107,7 +107,8 @@ export function summariseCrime(index: CrimeIndex, pos: LngLat): CrimeSummary {
   let total = 0
   for (const row of near) {
     total += row[2]
-    streets.set(row[4], (streets.get(row[4]) ?? 0) + row[2])
+    // Rows that only carry an LSOA's value (no police.uk records) have count 0
+    if (row[2] > 0) streets.set(row[4], (streets.get(row[4]) ?? 0) + row[2])
     for (const [id, n] of Object.entries(row[5] ?? {})) categories.set(id, (categories.get(id) ?? 0) + n)
   }
   // What is compared: the total within 150 m of the clicked position against the

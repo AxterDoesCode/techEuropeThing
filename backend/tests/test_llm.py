@@ -9,7 +9,7 @@ from pydantic_ai.models.test import TestModel
 
 from backend import extraction, llm
 from backend.geocode import GeoResult
-from backend.located import HALF_LIFE_MIN, Article
+from backend.located import Article
 from backend.models import Category, Event, RawItem, utcnow
 from backend.pipeline import run_poll
 from backend.sources.rss import BbcLondonSource, RssNewsSource, parse_feed
@@ -47,7 +47,8 @@ def item(place_id, **kwargs):
         "summary": "A man died after a stabbing.",
         "place_id": place_id,
         "place_text": "Lloyd Baker Street, Clerkenwell",
-        "severity": 0.95,
+        "severity": 0.9,
+        "is_recent": True,
     }
     return base | kwargs
 
@@ -96,10 +97,10 @@ def test_article_with_two_incidents():
     assert (first.lng, first.lat) == (-0.1104, 51.5289)
     assert first.confidence == pytest.approx(0.9) and first.radius_m == 250
     assert first.occurred_at == PUBLISHED
-    assert first.half_life_min == HALF_LIFE_MIN
+    assert first.last_confirmed_at == PUBLISHED and not first.is_ongoing
     assert first.urls == ["https://news.example/a/1"] and first.merge_into is None
-    # area-level match: lower confidence, wider radius; naive model time is read as UTC
-    assert second.confidence == pytest.approx(0.9 * 0.6) and second.radius_m == 2600
+    # area-level match: lower confidence, radius capped at 800 m; naive model time is read as UTC
+    assert second.confidence == pytest.approx(0.9 * 0.6) and second.radius_m == 800
     assert second.occurred_at == datetime(2026, 9, 18, 2, 0, tzinfo=timezone.utc)
 
 
@@ -325,7 +326,7 @@ def test_rules_are_used_when_llm_model_is_unset(monkeypatch):
     events, llm_calls = extraction.extract_events(article(), "bbc_london", "news")
     assert llm_calls == 0
     assert [e.external_ref for e in events] == ["bbc_london:guid-1"]
-    assert events[0].confidence == pytest.approx(0.7) and events[0].severity == 0.95
+    assert events[0].confidence == pytest.approx(0.7) and events[0].severity == 0.9
 
 
 def test_prefilter_runs_before_the_llm(monkeypatch):
@@ -358,7 +359,7 @@ def test_rules_are_used_when_the_model_raises(monkeypatch):
     events, _ = extraction.extract_events(article(), "met_news", "official_statement")
     assert extraction.llm_failures == failures + 1
     # title and severity of the rule-based extractor
-    assert events[0].title == article().title and events[0].severity == 0.95
+    assert events[0].title == article().title and events[0].severity == 0.9
 
 
 # ---------------------------------------------------------------- RSS source and pipeline

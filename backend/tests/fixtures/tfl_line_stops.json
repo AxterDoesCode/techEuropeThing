@@ -1,0 +1,830 @@
+{
+ "circle": [
+  {
+   "naptanId": "940GZZLUALD",
+   "commonName": "Aldgate Underground Station",
+   "lat": 51.514246,
+   "lon": -0.075689
+  },
+  {
+   "naptanId": "940GZZLUBBN",
+   "commonName": "Barbican Underground Station",
+   "lat": 51.520275,
+   "lon": -0.097993
+  },
+  {
+   "naptanId": "940GZZLUBKF",
+   "commonName": "Blackfriars Underground Station",
+   "lat": 51.511581,
+   "lon": -0.103659
+  },
+  {
+   "naptanId": "940GZZLUBST",
+   "commonName": "Baker Street Underground Station",
+   "lat": 51.522883,
+   "lon": -0.15713
+  },
+  {
+   "naptanId": "940GZZLUBWT",
+   "commonName": "Bayswater Underground Station",
+   "lat": 51.512284,
+   "lon": -0.187938
+  },
+  {
+   "naptanId": "940GZZLUCST",
+   "commonName": "Cannon Street Underground Station",
+   "lat": 51.51151,
+   "lon": -0.090432
+  },
+  {
+   "naptanId": "940GZZLUEMB",
+   "commonName": "Embankment Underground Station",
+   "lat": 51.507058,
+   "lon": -0.122666
+  },
+  {
+   "naptanId": "940GZZLUERC",
+   "commonName": "Edgware Road (Circle Line) Underground Station",
+   "lat": 51.519858,
+   "lon": -0.167832
+  },
+  {
+   "naptanId": "940GZZLUESQ",
+   "commonName": "Euston Square Underground Station",
+   "lat": 51.525604,
+   "lon": -0.135829
+  },
+  {
+   "naptanId": "940GZZLUFCN",
+   "commonName": "Farringdon Underground Station",
+   "lat": 51.520252,
+   "lon": -0.104913
+  },
+  {
+   "naptanId": "940GZZLUGHK",
+   "commonName": "Goldhawk Road Underground Station",
+   "lat": 51.502005,
+   "lon": -0.226715
+  },
+  {
+   "naptanId": "940GZZLUGPS",
+   "commonName": "Great Portland Street Underground Station",
+   "lat": 51.52384,
+   "lon": -0.144262
+  },
+  {
+   "naptanId": "940GZZLUGTR",
+   "commonName": "Gloucester Road Underground Station",
+   "lat": 51.494316,
+   "lon": -0.182658
+  },
+  {
+   "naptanId": "940GZZLUHSC",
+   "commonName": "Hammersmith (H&C Line) Underground Station",
+   "lat": 51.49331,
+   "lon": -0.2243
+  },
+  {
+   "naptanId": "940GZZLUHSK",
+   "commonName": "High Street Kensington Underground Station",
+   "lat": 51.501055,
+   "lon": -0.192792
+  },
+  {
+   "naptanId": "940GZZLUKSX",
+   "commonName": "King's Cross St. Pancras Underground Station",
+   "lat": 51.530663,
+   "lon": -0.123194
+  },
+  {
+   "naptanId": "940GZZLULAD",
+   "commonName": "Ladbroke Grove Underground Station",
+   "lat": 51.517449,
+   "lon": -0.210391
+  },
+  {
+   "naptanId": "940GZZLULRD",
+   "commonName": "Latimer Road Underground Station",
+   "lat": 51.513389,
+   "lon": -0.217799
+  },
+  {
+   "naptanId": "940GZZLULVT",
+   "commonName": "Liverpool Street Underground Station",
+   "lat": 51.517372,
+   "lon": -0.083182
+  },
+  {
+   "naptanId": "940GZZLUMGT",
+   "commonName": "Moorgate Underground Station",
+   "lat": 51.518176,
+   "lon": -0.088322
+  },
+  {
+   "naptanId": "940GZZLUMMT",
+   "commonName": "Monument Underground Station",
+   "lat": 51.5107,
+   "lon": -0.085969
+  },
+  {
+   "naptanId": "940GZZLUMSH",
+   "commonName": "Mansion House Underground Station",
+   "lat": 51.512117,
+   "lon": -0.094009
+  },
+  {
+   "naptanId": "940GZZLUNHG",
+   "commonName": "Notting Hill Gate Underground Station",
+   "lat": 51.509128,
+   "lon": -0.196104
+  },
+  {
+   "naptanId": "940GZZLUPAC",
+   "commonName": "Paddington Underground Station",
+   "lat": 51.516581,
+   "lon": -0.175689
+  },
+  {
+   "naptanId": "940GZZLUPAH",
+   "commonName": "Paddington (H&C Line)-Underground",
+   "lat": 51.518187,
+   "lon": -0.178306
+  },
+  {
+   "naptanId": "940GZZLURYO",
+   "commonName": "Royal Oak Underground Station",
+   "lat": 51.519113,
+   "lon": -0.188748
+  },
+  {
+   "naptanId": "940GZZLUSBM",
+   "commonName": "Shepherd's Bush Market Underground Station",
+   "lat": 51.505579,
+   "lon": -0.226375
+  },
+  {
+   "naptanId": "940GZZLUSJP",
+   "commonName": "St. James's Park Underground Station",
+   "lat": 51.499544,
+   "lon": -0.133608
+  },
+  {
+   "naptanId": "940GZZLUSKS",
+   "commonName": "South Kensington Underground Station",
+   "lat": 51.494094,
+   "lon": -0.174138
+  },
+  {
+   "naptanId": "940GZZLUSSQ",
+   "commonName": "Sloane Square Underground Station",
+   "lat": 51.49227,
+   "lon": -0.156377
+  },
+  {
+   "naptanId": "940GZZLUTMP",
+   "commonName": "Temple Underground Station",
+   "lat": 51.511006,
+   "lon": -0.11426
+  },
+  {
+   "naptanId": "940GZZLUTWH",
+   "commonName": "Tower Hill Underground Station",
+   "lat": 51.509971,
+   "lon": -0.076546
+  },
+  {
+   "naptanId": "940GZZLUVIC",
+   "commonName": "Victoria Underground Station",
+   "lat": 51.496359,
+   "lon": -0.143102
+  },
+  {
+   "naptanId": "940GZZLUWLA",
+   "commonName": "Wood Lane Underground Station",
+   "lat": 51.509669,
+   "lon": -0.22453
+  },
+  {
+   "naptanId": "940GZZLUWSM",
+   "commonName": "Westminster Underground Station",
+   "lat": 51.50132,
+   "lon": -0.124861
+  },
+  {
+   "naptanId": "940GZZLUWSP",
+   "commonName": "Westbourne Park Underground Station",
+   "lat": 51.52111,
+   "lon": -0.201065
+  }
+ ],
+ "central": [
+  {
+   "naptanId": "940GZZLUBKE",
+   "commonName": "Barkingside Underground Station",
+   "lat": 51.585689,
+   "lon": 0.088585
+  },
+  {
+   "naptanId": "940GZZLUBKH",
+   "commonName": "Buckhurst Hill Underground Station",
+   "lat": 51.626605,
+   "lon": 0.046757
+  },
+  {
+   "naptanId": "940GZZLUBLG",
+   "commonName": "Bethnal Green Underground Station",
+   "lat": 51.527222,
+   "lon": -0.055506
+  },
+  {
+   "naptanId": "940GZZLUBND",
+   "commonName": "Bond Street Underground Station",
+   "lat": 51.514304,
+   "lon": -0.149723
+  },
+  {
+   "naptanId": "940GZZLUBNK",
+   "commonName": "Bank Underground Station",
+   "lat": 51.51225,
+   "lon": -0.087792
+  },
+  {
+   "naptanId": "940GZZLUCHL",
+   "commonName": "Chancery Lane Underground Station",
+   "lat": 51.518247,
+   "lon": -0.111583
+  },
+  {
+   "naptanId": "940GZZLUCWL",
+   "commonName": "Chigwell Underground Station",
+   "lat": 51.617916,
+   "lon": 0.075041
+  },
+  {
+   "naptanId": "940GZZLUDBN",
+   "commonName": "Debden Underground Station",
+   "lat": 51.645386,
+   "lon": 0.083782
+  },
+  {
+   "naptanId": "940GZZLUEAN",
+   "commonName": "East Acton Underground Station",
+   "lat": 51.516612,
+   "lon": -0.247248
+  },
+  {
+   "naptanId": "940GZZLUEBY",
+   "commonName": "Ealing Broadway Underground Station",
+   "lat": 51.515017,
+   "lon": -0.301457
+  },
+  {
+   "naptanId": "940GZZLUEPG",
+   "commonName": "Epping Underground Station",
+   "lat": 51.69368,
+   "lon": 0.113767
+  },
+  {
+   "naptanId": "940GZZLUFLP",
+   "commonName": "Fairlop Underground Station",
+   "lat": 51.595618,
+   "lon": 0.091004
+  },
+  {
+   "naptanId": "940GZZLUGFD",
+   "commonName": "Greenford Underground Station",
+   "lat": 51.542424,
+   "lon": -0.34605
+  },
+  {
+   "naptanId": "940GZZLUGGH",
+   "commonName": "Grange Hill Underground Station",
+   "lat": 51.613378,
+   "lon": 0.092066
+  },
+  {
+   "naptanId": "940GZZLUGTH",
+   "commonName": "Gants Hill Underground Station",
+   "lat": 51.576544,
+   "lon": 0.066185
+  },
+  {
+   "naptanId": "940GZZLUHBN",
+   "commonName": "Holborn Underground Station",
+   "lat": 51.51758,
+   "lon": -0.120475
+  },
+  {
+   "naptanId": "940GZZLUHGR",
+   "commonName": "Hanger Lane Underground Station",
+   "lat": 51.530177,
+   "lon": -0.292704
+  },
+  {
+   "naptanId": "940GZZLUHLT",
+   "commonName": "Hainault Underground Station",
+   "lat": 51.603659,
+   "lon": 0.093482
+  },
+  {
+   "naptanId": "940GZZLUHPK",
+   "commonName": "Holland Park Underground Station",
+   "lat": 51.507143,
+   "lon": -0.205679
+  },
+  {
+   "naptanId": "940GZZLULGN",
+   "commonName": "Loughton Underground Station",
+   "lat": 51.641443,
+   "lon": 0.055476
+  },
+  {
+   "naptanId": "940GZZLULGT",
+   "commonName": "Lancaster Gate Underground Station",
+   "lat": 51.511723,
+   "lon": -0.175494
+  },
+  {
+   "naptanId": "940GZZLULVT",
+   "commonName": "Liverpool Street Underground Station",
+   "lat": 51.517372,
+   "lon": -0.083182
+  },
+  {
+   "naptanId": "940GZZLULYN",
+   "commonName": "Leyton Underground Station",
+   "lat": 51.556589,
+   "lon": -0.005523
+  },
+  {
+   "naptanId": "940GZZLULYS",
+   "commonName": "Leytonstone Underground Station",
+   "lat": 51.568324,
+   "lon": 0.008194
+  },
+  {
+   "naptanId": "940GZZLUMBA",
+   "commonName": "Marble Arch Underground Station",
+   "lat": 51.513424,
+   "lon": -0.158953
+  },
+  {
+   "naptanId": "940GZZLUMED",
+   "commonName": "Mile End Underground Station",
+   "lat": 51.525122,
+   "lon": -0.03364
+  },
+  {
+   "naptanId": "940GZZLUNAN",
+   "commonName": "North Acton Underground Station",
+   "lat": 51.523524,
+   "lon": -0.259755
+  },
+  {
+   "naptanId": "940GZZLUNBP",
+   "commonName": "Newbury Park Underground Station",
+   "lat": 51.575726,
+   "lon": 0.090004
+  },
+  {
+   "naptanId": "940GZZLUNHG",
+   "commonName": "Notting Hill Gate Underground Station",
+   "lat": 51.509128,
+   "lon": -0.196104
+  },
+  {
+   "naptanId": "940GZZLUNHT",
+   "commonName": "Northolt Underground Station",
+   "lat": 51.548236,
+   "lon": -0.368699
+  },
+  {
+   "naptanId": "940GZZLUOXC",
+   "commonName": "Oxford Circus Underground Station",
+   "lat": 51.515224,
+   "lon": -0.141903
+  },
+  {
+   "naptanId": "940GZZLUPVL",
+   "commonName": "Perivale Underground Station",
+   "lat": 51.536717,
+   "lon": -0.323446
+  },
+  {
+   "naptanId": "940GZZLUQWY",
+   "commonName": "Queensway Underground Station",
+   "lat": 51.510312,
+   "lon": -0.187152
+  },
+  {
+   "naptanId": "940GZZLURBG",
+   "commonName": "Redbridge Underground Station",
+   "lat": 51.576243,
+   "lon": 0.04536
+  },
+  {
+   "naptanId": "940GZZLURSG",
+   "commonName": "Ruislip Gardens Underground Station",
+   "lat": 51.560736,
+   "lon": -0.41071
+  },
+  {
+   "naptanId": "940GZZLURVY",
+   "commonName": "Roding Valley Underground Station",
+   "lat": 51.617199,
+   "lon": 0.043647
+  },
+  {
+   "naptanId": "940GZZLUSBC",
+   "commonName": "Shepherd's Bush (Central) Underground Station",
+   "lat": 51.504376,
+   "lon": -0.218813
+  },
+  {
+   "naptanId": "940GZZLUSNB",
+   "commonName": "Snaresbrook Underground Station",
+   "lat": 51.580678,
+   "lon": 0.02144
+  },
+  {
+   "naptanId": "940GZZLUSPU",
+   "commonName": "St. Paul's Underground Station",
+   "lat": 51.514936,
+   "lon": -0.097567
+  },
+  {
+   "naptanId": "940GZZLUSRP",
+   "commonName": "South Ruislip Underground Station",
+   "lat": 51.556853,
+   "lon": -0.398915
+  },
+  {
+   "naptanId": "940GZZLUSTD",
+   "commonName": "Stratford Underground Station",
+   "lat": 51.541806,
+   "lon": -0.003458
+  },
+  {
+   "naptanId": "940GZZLUSWF",
+   "commonName": "South Woodford Underground Station",
+   "lat": 51.591907,
+   "lon": 0.027338
+  },
+  {
+   "naptanId": "940GZZLUTCR",
+   "commonName": "Tottenham Court Road Underground Station",
+   "lat": 51.516426,
+   "lon": -0.13041
+  },
+  {
+   "naptanId": "940GZZLUTHB",
+   "commonName": "Theydon Bois Underground Station",
+   "lat": 51.671759,
+   "lon": 0.103085
+  },
+  {
+   "naptanId": "940GZZLUWCY",
+   "commonName": "White City Underground Station",
+   "lat": 51.511959,
+   "lon": -0.224297
+  },
+  {
+   "naptanId": "940GZZLUWOF",
+   "commonName": "Woodford Underground Station",
+   "lat": 51.606899,
+   "lon": 0.03397
+  },
+  {
+   "naptanId": "940GZZLUWRP",
+   "commonName": "West Ruislip Underground Station",
+   "lat": 51.569688,
+   "lon": -0.437886
+  },
+  {
+   "naptanId": "940GZZLUWSD",
+   "commonName": "Wanstead Underground Station",
+   "lat": 51.575501,
+   "lon": 0.028527
+  },
+  {
+   "naptanId": "940GZZLUWTA",
+   "commonName": "West Acton Underground Station",
+   "lat": 51.518001,
+   "lon": -0.28098
+  }
+ ],
+ "northern": [
+  {
+   "naptanId": "940GZZBPSUST",
+   "commonName": "Battersea Power Station Underground Station",
+   "lat": 51.479932,
+   "lon": -0.142142
+  },
+  {
+   "naptanId": "940GZZLUACY",
+   "commonName": "Archway Underground Station",
+   "lat": 51.565478,
+   "lon": -0.134819
+  },
+  {
+   "naptanId": "940GZZLUAGL",
+   "commonName": "Angel Underground Station",
+   "lat": 51.532624,
+   "lon": -0.105898
+  },
+  {
+   "naptanId": "940GZZLUBLM",
+   "commonName": "Balham Underground Station",
+   "lat": 51.443288,
+   "lon": -0.152997
+  },
+  {
+   "naptanId": "940GZZLUBNK",
+   "commonName": "Bank Underground Station",
+   "lat": 51.51225,
+   "lon": -0.087792
+  },
+  {
+   "naptanId": "940GZZLUBOR",
+   "commonName": "Borough Underground Station",
+   "lat": 51.501199,
+   "lon": -0.09337
+  },
+  {
+   "naptanId": "940GZZLUBTK",
+   "commonName": "Burnt Oak Underground Station",
+   "lat": 51.602774,
+   "lon": -0.264048
+  },
+  {
+   "naptanId": "940GZZLUBTX",
+   "commonName": "Brent Cross Underground Station",
+   "lat": 51.57665,
+   "lon": -0.213622
+  },
+  {
+   "naptanId": "940GZZLUBZP",
+   "commonName": "Belsize Park Underground Station",
+   "lat": 51.550529,
+   "lon": -0.164783
+  },
+  {
+   "naptanId": "940GZZLUCFM",
+   "commonName": "Chalk Farm Underground Station",
+   "lat": 51.544118,
+   "lon": -0.153388
+  },
+  {
+   "naptanId": "940GZZLUCHX",
+   "commonName": "Charing Cross Underground Station",
+   "lat": 51.50741,
+   "lon": -0.127277
+  },
+  {
+   "naptanId": "940GZZLUCND",
+   "commonName": "Colindale Underground Station",
+   "lat": 51.595424,
+   "lon": -0.249919
+  },
+  {
+   "naptanId": "940GZZLUCPC",
+   "commonName": "Clapham Common Underground Station",
+   "lat": 51.461742,
+   "lon": -0.138317
+  },
+  {
+   "naptanId": "940GZZLUCPN",
+   "commonName": "Clapham North Underground Station",
+   "lat": 51.465135,
+   "lon": -0.130016
+  },
+  {
+   "naptanId": "940GZZLUCPS",
+   "commonName": "Clapham South Underground Station",
+   "lat": 51.452654,
+   "lon": -0.147582
+  },
+  {
+   "naptanId": "940GZZLUCSD",
+   "commonName": "Colliers Wood Underground Station",
+   "lat": 51.41816,
+   "lon": -0.178086
+  },
+  {
+   "naptanId": "940GZZLUCTN",
+   "commonName": "Camden Town Underground Station",
+   "lat": 51.539292,
+   "lon": -0.14274
+  },
+  {
+   "naptanId": "940GZZLUEAC",
+   "commonName": "Elephant & Castle Underground Station",
+   "lat": 51.494536,
+   "lon": -0.100606
+  },
+  {
+   "naptanId": "940GZZLUEFY",
+   "commonName": "East Finchley Underground Station",
+   "lat": 51.587131,
+   "lon": -0.165012
+  },
+  {
+   "naptanId": "940GZZLUEGW",
+   "commonName": "Edgware Underground Station",
+   "lat": 51.613653,
+   "lon": -0.274928
+  },
+  {
+   "naptanId": "940GZZLUEMB",
+   "commonName": "Embankment Underground Station",
+   "lat": 51.507058,
+   "lon": -0.122666
+  },
+  {
+   "naptanId": "940GZZLUEUS",
+   "commonName": "Euston Underground Station",
+   "lat": 51.528344,
+   "lon": -0.1323
+  },
+  {
+   "naptanId": "940GZZLUFYC",
+   "commonName": "Finchley Central Underground Station",
+   "lat": 51.600921,
+   "lon": -0.192527
+  },
+  {
+   "naptanId": "940GZZLUGDG",
+   "commonName": "Goodge Street Underground Station",
+   "lat": 51.520599,
+   "lon": -0.134361
+  },
+  {
+   "naptanId": "940GZZLUGGN",
+   "commonName": "Golders Green Underground Station",
+   "lat": 51.572259,
+   "lon": -0.194039
+  },
+  {
+   "naptanId": "940GZZLUHBT",
+   "commonName": "High Barnet Underground Station",
+   "lat": 51.650541,
+   "lon": -0.194298
+  },
+  {
+   "naptanId": "940GZZLUHCL",
+   "commonName": "Hendon Central Underground Station",
+   "lat": 51.583301,
+   "lon": -0.226424
+  },
+  {
+   "naptanId": "940GZZLUHGT",
+   "commonName": "Highgate Underground Station",
+   "lat": 51.577532,
+   "lon": -0.145857
+  },
+  {
+   "naptanId": "940GZZLUHTD",
+   "commonName": "Hampstead Underground Station",
+   "lat": 51.556239,
+   "lon": -0.177464
+  },
+  {
+   "naptanId": "940GZZLUKNG",
+   "commonName": "Kennington Underground Station",
+   "lat": 51.488337,
+   "lon": -0.105963
+  },
+  {
+   "naptanId": "940GZZLUKSH",
+   "commonName": "Kentish Town Underground Station",
+   "lat": 51.550312,
+   "lon": -0.140733
+  },
+  {
+   "naptanId": "940GZZLUKSX",
+   "commonName": "King's Cross St. Pancras Underground Station",
+   "lat": 51.530663,
+   "lon": -0.123194
+  },
+  {
+   "naptanId": "940GZZLULNB",
+   "commonName": "London Bridge Underground Station",
+   "lat": 51.505721,
+   "lon": -0.088873
+  },
+  {
+   "naptanId": "940GZZLULSQ",
+   "commonName": "Leicester Square Underground Station",
+   "lat": 51.511386,
+   "lon": -0.128426
+  },
+  {
+   "naptanId": "940GZZLUMDN",
+   "commonName": "Morden Underground Station",
+   "lat": 51.402142,
+   "lon": -0.194839
+  },
+  {
+   "naptanId": "940GZZLUMGT",
+   "commonName": "Moorgate Underground Station",
+   "lat": 51.518176,
+   "lon": -0.088322
+  },
+  {
+   "naptanId": "940GZZLUMHL",
+   "commonName": "Mill Hill East Underground Station",
+   "lat": 51.608229,
+   "lon": -0.209986
+  },
+  {
+   "naptanId": "940GZZLUMTC",
+   "commonName": "Mornington Crescent Underground Station",
+   "lat": 51.534679,
+   "lon": -0.138789
+  },
+  {
+   "naptanId": "940GZZLUODS",
+   "commonName": "Old Street Underground Station",
+   "lat": 51.525864,
+   "lon": -0.08777
+  },
+  {
+   "naptanId": "940GZZLUOVL",
+   "commonName": "Oval Underground Station",
+   "lat": 51.48185,
+   "lon": -0.112439
+  },
+  {
+   "naptanId": "940GZZLUSKW",
+   "commonName": "Stockwell Underground Station",
+   "lat": 51.472184,
+   "lon": -0.122644
+  },
+  {
+   "naptanId": "940GZZLUSWN",
+   "commonName": "South Wimbledon Underground Station",
+   "lat": 51.415309,
+   "lon": -0.192005
+  },
+  {
+   "naptanId": "940GZZLUTAW",
+   "commonName": "Totteridge & Whetstone Underground Station",
+   "lat": 51.630597,
+   "lon": -0.17921
+  },
+  {
+   "naptanId": "940GZZLUTBC",
+   "commonName": "Tooting Bec Underground Station",
+   "lat": 51.435678,
+   "lon": -0.159736
+  },
+  {
+   "naptanId": "940GZZLUTBY",
+   "commonName": "Tooting Broadway Underground Station",
+   "lat": 51.42763,
+   "lon": -0.168374
+  },
+  {
+   "naptanId": "940GZZLUTCR",
+   "commonName": "Tottenham Court Road Underground Station",
+   "lat": 51.516426,
+   "lon": -0.13041
+  },
+  {
+   "naptanId": "940GZZLUTFP",
+   "commonName": "Tufnell Park Underground Station",
+   "lat": 51.556822,
+   "lon": -0.138433
+  },
+  {
+   "naptanId": "940GZZLUWFN",
+   "commonName": "West Finchley Underground Station",
+   "lat": 51.609426,
+   "lon": -0.188362
+  },
+  {
+   "naptanId": "940GZZLUWLO",
+   "commonName": "Waterloo Underground Station",
+   "lat": 51.503299,
+   "lon": -0.11478
+  },
+  {
+   "naptanId": "940GZZLUWOP",
+   "commonName": "Woodside Park Underground Station",
+   "lat": 51.618014,
+   "lon": -0.18542
+  },
+  {
+   "naptanId": "940GZZLUWRR",
+   "commonName": "Warren Street Underground Station",
+   "lat": 51.524951,
+   "lon": -0.138321
+  },
+  {
+   "naptanId": "940GZZNEUGST",
+   "commonName": "Nine Elms Underground Station",
+   "lat": 51.479912,
+   "lon": -0.128476
+  }
+ ]
+}

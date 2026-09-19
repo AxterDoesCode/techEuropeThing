@@ -9,6 +9,7 @@ from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.middleware.cors import CORSMiddleware
 
 from . import db
+from .api_alerts import router as alerts_router
 from .api_route import router as route_router
 from .api_platform import router as platform_router
 from .api_stream import router as stream_router
@@ -22,6 +23,7 @@ web.add_middleware(GZipMiddleware, minimum_size=10_000)
 web.include_router(route_router)
 web.include_router(stream_router)
 web.include_router(platform_router)
+web.include_router(alerts_router)
 
 
 def _parse_bbox(bbox: str | None) -> tuple[float, float, float, float] | None:
