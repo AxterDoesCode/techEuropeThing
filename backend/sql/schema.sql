@@ -123,7 +123,8 @@ insert or ignore into sources (id, kind, poll_interval_s) values
   ('met_news', 'unstructured', 600),
   ('bbc_london', 'unstructured', 600),
   ('standard_london', 'unstructured', 600),
-  ('mylondon', 'unstructured', 600);
+  ('mylondon', 'unstructured', 600),
+  ('x_london', 'unstructured', 300);
 
 -- Sources that were deployed once and then removed. Their rows are deleted so they
 -- do not appear in the agents panel; events they created are deleted with them.

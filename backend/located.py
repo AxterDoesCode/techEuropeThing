@@ -31,6 +31,8 @@ class Article:
     source_id: str
     # upstream identifier of the item; part of the event's external_ref
     guid: str
+    # "news" (article or official statement) or "social" (a post by a member of the public)
+    kind: str = "news"
 
 
 def confidence_for(source_type: str, precision_m: float) -> float:
