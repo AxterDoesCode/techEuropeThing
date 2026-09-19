@@ -26,7 +26,7 @@ function countSentence(data: HotelsResponse, shown: number, place: SearchPlace):
   const where = `within ${formatDistance(data.radius_m)} of ${place.label}`
   if (data.total === 0) return `No places to stay ${where}`
   const returned = data.hotels.length
-  const capped = data.total > returned ? ` The service returns at most ${returned} per search.` : ''
+  const capped = data.total > returned ? ` The service returns at most ${returned} per search, chosen by the selected sort order.` : ''
   return `Showing ${shown} of ${data.total} places to stay ${where}.${capped}`
 }
 
@@ -40,13 +40,29 @@ export default function App() {
   const [pinned, setPinned] = useState<Hotel[]>([])
   const [retry, setRetry] = useState({ hotels: 0, area: 0, route: 0 })
 
-  // The service returns at most 60 hotels in the requested order, so a sort change is a new request.
-  const hotelsState = useRequest(
-    place ? `hotels:${place.lat},${place.lng},${radius},${sort}` : null,
-    (signal) => fetchHotels({ lat: place!.lat, lng: place!.lng, radius_m: radius, sort }, signal),
+  // One request per search, ordered by modelled risk. "Closest" is sorted in the browser.
+  // The service returns at most 60 hotels; only when the search has more than that does
+  // "Closest" need its own request, because the 60 closest differ from the 60 with the lowest risk.
+  const searchKey = place ? `${place.lat},${place.lng},${radius}` : null
+  const byRisk = useRequest(
+    searchKey ? `hotels:${searchKey},safety` : null,
+    (signal) => fetchHotels({ lat: place!.lat, lng: place!.lng, radius_m: radius, sort: 'safety' }, signal),
     retry.hotels,
   )
-  const allHotels = hotelsState.status === 'success' ? hotelsState.data.hotels : null
+  const truncated = byRisk.status === 'success' && byRisk.data.total > byRisk.data.hotels.length
+  const byDistance = useRequest(
+    searchKey && sort === 'distance' && truncated ? `hotels:${searchKey},distance` : null,
+    (signal) => fetchHotels({ lat: place!.lat, lng: place!.lng, radius_m: radius, sort: 'distance' }, signal),
+    retry.hotels,
+  )
+  const hotelsState = sort === 'distance' && truncated ? byDistance : byRisk
+  const allHotels = useMemo(() => {
+    if (hotelsState.status !== 'success') return null
+    const hotels = [...hotelsState.data.hotels]
+    if (sort === 'distance') hotels.sort((a, b) => a.distance_m - b.distance_m)
+    else hotels.sort((a, b) => (a.risk?.mean_score ?? Infinity) - (b.risk?.mean_score ?? Infinity))
+    return hotels
+  }, [hotelsState, sort])
 
   const visible = useMemo(
     () =>

@@ -71,9 +71,9 @@ export function formatPeriod(period: string): string {
   return from === to ? formatMonth(from) : `${formatMonth(from)} to ${formatMonth(to)}`
 }
 
-/** Period covered by a crime block: `period` when the service sends it, otherwise the single `month`. */
-export function crimePeriodLabel(crime: { month: string; period?: string | null }): string {
-  return formatPeriod(crime.period || crime.month)
+/** Month of the police.uk records that the crime counts come from, for example "July 2026". */
+export function crimeMonthLabel(crime: { month: string }): string {
+  return formatMonth(crime.month)
 }
 
 export function formatPercent(share: number): string {

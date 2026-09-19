@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import type { Hotel } from '../api'
 import { useHotelArea, useStationWalk } from '../hooks/useHotelData'
-import { crimePeriodLabel, formatMinutes, formatScore, percentileNumber, riskClass } from '../risk'
+import { crimeMonthLabel, formatMinutes, formatScore, percentileNumber, riskClass } from '../risk'
 
 export const MAX_PINNED = 3
 
@@ -13,7 +13,7 @@ function CrimesCell({ hotel }: { hotel: Hotel }) {
   return (
     <>
       {area.data.crime.recorded_crimes.toLocaleString('en-GB')}
-      <span className="muted compare__period"> {crimePeriodLabel(area.data.crime)}</span>
+      <span className="muted compare__period"> {crimeMonthLabel(area.data.crime)}</span>
     </>
   )
 }

@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react'
 import type { AreaResponse, Hotel, RouteResponse } from '../api'
 import { starCount, subtypeLabel } from '../hotel'
 import type { RequestState } from '../hooks/useRequest'
+import { formatPeriod } from '../risk'
 import { AreaSection } from './AreaSection'
 import { HotelLink } from './HotelLink'
 import { RiskMeter } from './RiskMeter'
@@ -26,6 +27,10 @@ export function DetailPanel(props: Props) {
   const { hotel, area, route, pinned, pinDisabled, onTogglePin, onRetryArea, onRetryRoute, onClose, onShowMap } = props
   const heading = useRef<HTMLHeadingElement>(null)
   const stars = starCount(hotel)
+  // `period` and `method` of the crime block describe the baseline of the modelled risk, not the crime counts.
+  const crime = area.status === 'success' ? area.data.crime : null
+  const baselinePeriod = crime?.period ?? null
+  const baselineMethod = crime?.method ?? null
 
   useEffect(() => {
     heading.current?.focus()
@@ -73,9 +78,11 @@ export function DetailPanel(props: Props) {
           <HotelLink hotel={hotel} />
         </p>
         <RiskMeter risk={hotel.risk} />
-        <p className="note">
-          Modelled risk combines current events with police-recorded crime for the period shown below. It is a modelled value
-          from 0 to 1, not a probability.
+        <p className="note" data-testid="risk-note">
+          Modelled risk combines current events with a baseline built from Met Police recorded crime
+          {baselinePeriod ? ` for ${formatPeriod(baselinePeriod)}` : ''}. It is a modelled value from 0 to 1, not a
+          probability.
+          {baselineMethod && <span className="note__method"> Baseline method: {baselineMethod}</span>}
         </p>
         <AreaSection state={area} onRetry={onRetryArea} />
         <RouteSection station={hotel.nearest_station} state={route} onRetry={onRetryRoute} onShowMap={onShowMap} />

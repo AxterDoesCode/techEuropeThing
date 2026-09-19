@@ -789,8 +789,11 @@ ul {
   line-height: 1.2;
 }
 
+/* The heading has tabindex -1 and is focused by script when the panel opens, so that
+   screen readers announce the hotel. It is not a tab stop and needs no focus outline. */
+.detail__body h2:focus,
 .detail__body h2:focus-visible {
-  outline-offset: 4px;
+  outline: none;
 }
 
 .detail__contact {
@@ -1185,4 +1188,10 @@ ul {
   .compare__table td {
     min-width: 120px;
   }
+}
+
+.note__method {
+  display: block;
+  margin-top: 6px;
+  font-size: 0.8125rem;
 }

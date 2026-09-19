@@ -27,7 +27,7 @@ export function Landing({ radius, onSearch, onRadiusChange }: Props) {
           </li>
           <li>
             <strong>Recorded crime and current events</strong>
-            Police-recorded crime for the period shown and events reported now, within 300 m.
+            Police-recorded crime for the month shown and events reported now, within 300 m.
           </li>
           <li>
             <strong>The walk from the station</strong>

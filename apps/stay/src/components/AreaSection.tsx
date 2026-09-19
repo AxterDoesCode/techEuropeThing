@@ -1,6 +1,6 @@
 import type { AreaResponse, CrimeBlock, EventFeature } from '../api'
 import type { RequestState } from '../hooks/useRequest'
-import { crimePeriodLabel, formatDistance, humanise, sourceName } from '../risk'
+import { crimeMonthLabel, formatDistance, humanise, sourceName } from '../risk'
 import { ErrorNote, Loading } from './StatusBlocks'
 
 const AREA_RADIUS_LABEL = '300 m'
@@ -35,8 +35,8 @@ function CrimeSummary({ crime }: { crime: CrimeBlock }) {
       <p className="stat">
         <span className="stat__number">{crime.recorded_crimes.toLocaleString('en-GB')}</span> recorded crimes within{' '}
         {AREA_RADIUS_LABEL}
-        <span className="stat__period" data-testid="crime-period">
-          Period: {crimePeriodLabel(crime)}
+        <span className="stat__period" data-testid="crime-month">
+          police.uk records for {crimeMonthLabel(crime)}
         </span>
       </p>
       <p className="note">
@@ -55,7 +55,6 @@ function CrimeSummary({ crime }: { crime: CrimeBlock }) {
           <CountBars rows={streets} label="Recorded crimes by street" />
         </>
       )}
-      {crime.method && <p className="note">How the counts are derived: {crime.method}</p>}
     </>
   )
 }
@@ -135,7 +134,10 @@ export function AreaSection({ state, onRetry }: Props) {
           )}
           <h4>Current events</h4>
           {state.data.events.length === 0 ? (
-            <p className="muted">No current events within {AREA_RADIUS_LABEL}.</p>
+            <p className="muted" data-testid="no-events">
+              No current events within {AREA_RADIUS_LABEL}. The platform has no active report from its news, police
+              and transport sources for this circle at the moment.
+            </p>
           ) : (
             <ul className="events">
               {state.data.events.map((event) => (

@@ -82,11 +82,14 @@ export interface CrimeStreet {
 }
 
 export interface CrimeBlock {
-  /** Month of the police.uk street points the counts are placed on. */
+  /** Month ("YYYY-MM") of the police.uk records behind `recorded_crimes`, `top_categories` and `top_streets`. */
   month: string
-  /** Period the counts cover, "YYYY-MM..YYYY-MM". Absent on older deployments. */
+  /**
+   * Period ("YYYY-MM..YYYY-MM") of the Met Police data behind the baseline of the modelled risk.
+   * It does not describe the counts in this block. Absent on older deployments.
+   */
   period?: string | null
-  /** Sentence on how the counts are derived. */
+  /** Sentence on how the baseline of the modelled risk is derived. */
   method?: string | null
   recorded_crimes: number
   weighted: number

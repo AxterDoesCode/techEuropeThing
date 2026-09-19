@@ -35,16 +35,22 @@ export function AboutData() {
           <h2>About the data</h2>
           <ul>
             <li>
-              Modelled risk is a value from 0 to 1 that combines current events with police-recorded crime for the
-              period shown with each crime figure. It is a modelled value, not a probability.
+              Modelled risk is a value from 0 to 1 that combines current events with a baseline built from twelve
+              months of Met Police recorded crime. The exact period is shown with the modelled risk in each hotel’s
+              details. It is a modelled value, not a probability.
             </li>
             <li>
               “Higher than N% of London” is the share of scored London map cells with a lower value than the 300 m
               around the hotel.
             </li>
             <li>
-              The police crime data has no time of day. Recorded crime is higher where many people gather (stations,
-              nightlife, shopping streets).
+              The crime counts shown around a hotel are police.uk records for one month, which is named next to the
+              count. Neither crime data set has a time of day. Recorded crime is higher where many people gather
+              (stations, nightlife, shopping streets).
+            </li>
+            <li>
+              Current events come from news, police and transport sources. Often there is none within 300 m of a
+              hotel.
             </li>
             <li>Hotels, stations and the map are © OpenStreetMap contributors. Hotel details can be incomplete.</li>
             <li>No prices or availability are provided. Use the hotel’s own website to book.</li>
