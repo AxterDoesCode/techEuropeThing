@@ -200,19 +200,34 @@ function buildRouteLayers(idPrefix: string, route: RouteResult | null, markers: 
   }
 }
 
-// Bounds the camera fits for an assistant layer, limited to the London area
+// Bounds the camera fits for an assistant layer: the route or the area, extended
+// to the events shown as cards, limited to the London area
 function assistantFitBounds(layer: AssistantLayer) {
+  let target: [number, number][] | null = null
   if (layer.focus === 'route' && layer.route) {
-    const bbox = bboxOf([...layer.route.fast.geometry.coordinates, ...layer.route.safe.geometry.coordinates])
-    return bbox && clampFitBounds(bbox)
+    target = [...layer.route.fast.geometry.coordinates, ...layer.route.safe.geometry.coordinates]
+  } else if (layer.focus === 'area' && layer.area) {
+    const [west, south, east, north] = layer.area.bbox ?? bboxAround(layer.area.center, layer.area.radius_m)
+    target = [[west, south], [east, north]]
   }
-  if (layer.focus === 'area' && layer.area) {
-    return clampFitBounds(layer.area.bbox ?? bboxAround(layer.area.center, layer.area.radius_m))
-  }
-  return null
+  if (!target) return null
+  const cards = layer.events.filter((e) => layer.cardIds.includes(e.properties.id))
+  const bbox = bboxOf([...target, ...cards.map((e): [number, number] => [e.properties.lng, e.properties.lat])])
+  return bbox && clampFitBounds(bbox)
 }
 
-const CARD_POPUP: Omit<PopupOptions, 'onUserClose'> = { offset: 20, className: 'event-popup assistant-card', maxWidth: '220px' }
+// Cards open while the user is typing in the chat panel: they do not take the keyboard focus
+const CARD_POPUP: Omit<PopupOptions, 'onUserClose'> = {
+  offset: 16, className: 'event-popup assistant-card', maxWidth: '220px', focusAfterOpen: false,
+}
+// Added to the fit padding of an assistant layer so that the cards of events at
+// the ends of a route open inside the visible map area
+const CARD_FIT_MARGIN = { top: 90, bottom: 0, left: 80, right: 80 }
+// fitBounds computes the zoom for an unpitched camera. With pitch the near part of
+// the view is magnified and the bounds extend past the padding; the fit of an
+// assistant layer zooms out by this amount per degree of pitch (0.45 at the home pitch of 50).
+const PITCH_ZOOM_MARGIN_PER_DEG = 0.009
+
 
 export function RiskMap({
   events, crime, showCrime, crimeOpacity, crimeAt, onCrimeQuery, selectedId, target, sidebarOpen,
@@ -338,7 +353,14 @@ export function RiskMap({
     const bounds = assistantFitBounds(assistantRef.current)
     if (!map || !bounds) return
     const [west, south, east, north] = bounds
-    map.fitBounds([[west, south], [east, north]], { padding: fitPadding(map, panelsOpenRef.current), duration: 1200, maxZoom: 16 })
+    const base = fitPadding(map, panelsOpenRef.current)
+    const padding = {
+      top: base.top + CARD_FIT_MARGIN.top, bottom: base.bottom + CARD_FIT_MARGIN.bottom,
+      left: base.left + CARD_FIT_MARGIN.left, right: base.right + CARD_FIT_MARGIN.right,
+    }
+    const camera = map.cameraForBounds([[west, south], [east, north]], { padding, maxZoom: 16 })
+    if (!camera || camera.zoom === undefined) return
+    map.flyTo({ ...camera, zoom: camera.zoom - PITCH_ZOOM_MARGIN_PER_DEG * map.getPitch(), duration: 1200 })
   }, [assistant.nonce])
 
   const routeLayers = useMemo(() => {

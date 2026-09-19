@@ -57,7 +57,7 @@ function EventList({ entry, ui, selectedId, onSelectEvent }: { entry: ChatEntry;
           const classes = `${highlighted.has(p.id) ? 'highlighted' : ''} ${p.id === selectedId ? 'selected' : ''}`
           return (
             <li key={p.id}>
-              <button type="button" className={classes} onClick={() => onSelectEvent(entry.id, e)}>
+              <button type="button" className={classes} data-event-id={p.id} onClick={() => onSelectEvent(entry.id, e)}>
                 <span className="dot" style={{ background: `rgb(${CATEGORY_COLOR[p.category].join(',')})` }} />
                 <span className="title">{p.title}</span>
                 <span className="risk">{p.risk.toFixed(2)}</span>

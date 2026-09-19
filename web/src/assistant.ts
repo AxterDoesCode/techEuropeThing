@@ -1,10 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { ChatError, MAX_MESSAGE_CHARS, sendChat } from './chat'
 import type { AssistantEvent, ChatArea, ChatMessage, ChatResponse, ChatUi, MapContext, RouteLabels } from './chat'
+import { distanceM } from './geo'
 import type { RouteResult } from './types'
 
 // Compact event cards open on the map at the same time
 export const MAX_CARDS = 6
+// Cards of events closer together than this cover each other at every zoom level
+// (several notices for one station share a position): only the first gets a card
+const MIN_CARD_SPACING_M = 30
 
 /** Everything the chatbot drew on the map. Replaced as a whole by each answer. */
 export interface AssistantLayer {
@@ -28,14 +32,18 @@ export const EMPTY_ASSISTANT_LAYER: AssistantLayer = {
 }
 
 // Cards go to the highlighted events with the highest current risk. A response
-// that highlights nothing gets cards for its highest-risk events instead.
+// that highlights nothing gets cards for its highest-risk events instead. Events
+// without a card keep their marker and their entry in the chat list.
 function pickCardIds(ui: ChatUi): string[] {
   const highlighted = new Set(ui.highlightIds)
   const candidates = highlighted.size > 0 ? ui.events.filter((e) => highlighted.has(e.properties.id)) : ui.events
-  return [...candidates]
-    .sort((a, b) => b.properties.risk - a.properties.risk)
-    .slice(0, MAX_CARDS)
-    .map((e) => e.properties.id)
+  const position = (e: AssistantEvent): [number, number] => [e.properties.lng, e.properties.lat]
+  const chosen: AssistantEvent[] = []
+  for (const e of [...candidates].sort((a, b) => b.properties.risk - a.properties.risk)) {
+    if (chosen.length === MAX_CARDS) break
+    if (!chosen.some((c) => distanceM(position(c), position(e)) < MIN_CARD_SPACING_M)) chosen.push(e)
+  }
+  return chosen.map((e) => e.properties.id)
 }
 
 function layerFor(entryId: number, ui: ChatUi, fit: boolean): AssistantLayer {

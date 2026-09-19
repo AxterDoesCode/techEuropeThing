@@ -15,6 +15,8 @@ export interface PopupOptions {
   offset: PopupOffset
   className: string
   maxWidth: string
+  /** move the keyboard focus into the popup when it opens (MapLibre default: true) */
+  focusAfterOpen?: boolean
   /** the user closed the popup with its close button */
   onUserClose: (key: string) => void
 }
@@ -80,11 +82,11 @@ export function usePopups(
 }
 
 function openPopup(map: maplibregl.Map, item: PopupItem, options: PopupOptions, onUserClose: (key: string) => void): OpenPopup {
-  const { offset, className, maxWidth } = options
+  const { offset, className, maxWidth, focusAfterOpen = true } = options
   const node = document.createElement('div')
   const offsetNow = () => (typeof offset === 'function' ? offset(map, item.at) : offset)
   // closeOnClick is off: the click that opens a popup would also close it
-  const popup = new maplibregl.Popup({ offset: offsetNow(), maxWidth, closeOnClick: false, className })
+  const popup = new maplibregl.Popup({ offset: offsetNow(), maxWidth, closeOnClick: false, className, focusAfterOpen })
     .setLngLat([item.at.lng, item.at.lat])
     .setDOMContent(node)
     .addTo(map)

@@ -14,6 +14,8 @@ const DEMO_ROUTE_EVENTS = 8
 const DEMO_ROUTE_HIGHLIGHTS = 7
 const DEMO_AREA_MIN_EVENTS = 5
 const DEMO_AREA_HIGHLIGHTS = 3
+// Several sample events share the position of a station; the demo route uses events at distinct positions
+const DEMO_MIN_SPACING_M = 60
 
 // Bank station to Farringdon station: the part of the bundled sample with the most events
 const DEMO_ROUTE_LABELS = { origin: 'Bank station (demo)', destination: 'Farringdon station (demo)' }
@@ -72,9 +74,15 @@ function withRelevance(e: EventFeature, relevance: { distance_m: number; along_m
 const byRisk = (a: EventFeature, b: EventFeature) => b.properties.risk - a.properties.risk
 
 function demoRouteResponse(sample: EventFeature[]) {
+  const spaced: EventFeature[] = []
   const events = sample
     .map((e) => ({ e, rel: distanceToLineM(position(e), DEMO_SAFE_LINE) }))
     .sort((a, b) => a.rel.distance_m - b.rel.distance_m)
+    .filter(({ e }) => {
+      if (spaced.some((other) => distanceM(position(other), position(e)) < DEMO_MIN_SPACING_M)) return false
+      spaced.push(e)
+      return true
+    })
     .slice(0, DEMO_ROUTE_EVENTS)
     .map(({ e, rel }) => withRelevance(e, { distance_m: Math.round(rel.distance_m), along_m: Math.round(rel.along_m) }))
     .sort(byRisk)

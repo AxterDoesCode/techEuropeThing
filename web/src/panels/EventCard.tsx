@@ -13,14 +13,14 @@ interface Props {
 export function EventCard({ event, alongRoute, onOpen }: Props) {
   const p = event.properties
   return (
-    <button type="button" className="event-card" onClick={() => onOpen(p.id)} title="Open the event details">
+    <button type="button" className="event-card" data-event-id={p.id} onClick={() => onOpen(p.id)} title="Open the event details">
       <span className="title">{p.title}</span>
       <span className="meta">
         <span className="dot" style={{ background: `rgb(${CATEGORY_COLOR[p.category].join(',')})` }} />
-        {CATEGORY_LABEL[p.category]}{p.subtype ? ` · ${p.subtype}` : ''}
+        {CATEGORY_LABEL[p.category]}{p.subtype ? ` · ${p.subtype}` : ''} · {p.ended_at === null ? 'ongoing' : 'ended'}
       </span>
       <span className="meta">
-        {p.ended_at === null ? 'ongoing' : 'ended'} · risk {p.risk.toFixed(2)}
+        risk {p.risk.toFixed(2)}
         {alongRoute && p.relevance && ` · ${Math.round(p.relevance.distance_m)} m from the route`}
       </span>
     </button>
