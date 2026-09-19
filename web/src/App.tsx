@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useState } from 'react'
-import { CRIME_REFRESH_MS, fetchAgents, fetchCrimePoints, fetchEvents, POLL_INTERVAL_MS } from './api'
+import { API_BASE, CRIME_REFRESH_MS, fetchAgents, fetchCrimePoints, POLL_INTERVAL_MS } from './api'
 import { usePolling } from './usePolling'
+import { useLiveEvents } from './useLiveEvents'
 import { RiskMap } from './map/RiskMap'
 import { EventFeed } from './panels/EventFeed'
 import { CoordinatePanel, type CoordinateFields } from './panels/CoordinatePanel'
@@ -11,8 +12,15 @@ import { useTheme } from './theme'
 import type { EventFeature, LngLat } from './types'
 
 export default function App() {
-  const events = usePolling(fetchEvents, POLL_INTERVAL_MS)
-  const agents = usePolling(fetchAgents, POLL_INTERVAL_MS)
+  const events = useLiveEvents()
+  // usePolling reloads immediately when `load` changes identity, so a function
+  // that depends on the agent_run counter reloads /api/agents on every such message
+  const agentRuns = events.agentRuns
+  const loadAgents = useCallback(() => {
+    void agentRuns
+    return fetchAgents()
+  }, [agentRuns])
+  const agents = usePolling(loadAgents, POLL_INTERVAL_MS)
   const crime = usePolling(fetchCrimePoints, CRIME_REFRESH_MS)
   const [showCrime, setShowCrime] = useState(true)
 
@@ -22,7 +30,7 @@ export default function App() {
   const [fields, setFields] = useState<CoordinateFields>({ lng: '', lat: '' })
   const [theme, toggleTheme] = useTheme()
 
-  const features = useMemo(() => events.data?.features ?? [], [events.data])
+  const features = events.events
   const crimeRows = useMemo(() => (showCrime ? (crime.data?.rows ?? []) : []), [showCrime, crime.data])
   const error = events.error ?? agents.error ?? crime.error
 
@@ -50,6 +58,9 @@ export default function App() {
       />
       <header className="panel header">
         <h1>London Live Risk Map</h1>
+        {API_BASE && (
+          <span className={`stream-status ${events.connected ? 'live' : ''}`}>{events.connected ? 'live' : 'polling'}</span>
+        )}
         <button className="theme-toggle" onClick={toggleTheme} aria-label="Toggle light and dark mode">
           {theme === 'dark' ? 'Light mode' : 'Dark mode'}
         </button>
@@ -58,7 +69,7 @@ export default function App() {
       <aside className="left">
         <CoordinatePanel hover={hover} fields={fields} onChange={setFields} onGo={goTo} />
         <LayerPanel crime={crime.data} showCrime={showCrime} onToggleCrime={setShowCrime} />
-        <EventFeed events={features} selectedId={selectedId} onSelect={selectFromFeed} />
+        <EventFeed events={features} newIds={events.newIds} selectedId={selectedId} onSelect={selectFromFeed} />
         <AgentPanel agents={agents.data ?? []} />
       </aside>
     </div>
