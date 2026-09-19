@@ -447,6 +447,14 @@ class SqliteRepo:
                         confirmed = [existing.last_confirmed_at or existing.occurred_at]
                         if ev.is_ongoing:
                             confirmed.append(ev.last_confirmed_at or utcnow())
+                        elif existing.is_ongoing:
+                            # The report no longer says the event is in progress: it
+                            # ended at the time of this version of the report, not at
+                            # occurred_at, which can be days earlier.
+                            params["is_ongoing"] = 1
+                            params["ended_at"] = _ts(
+                                existing.ended_at or max(ev.last_confirmed_at or utcnow(), confirmed[0])
+                            )
                         params["last_confirmed_at"] = _ts(max(confirmed))
                     row = conn.execute(
                         f"select id, ended_at, last_confirmed_at, {', '.join(_COMPARED)} from events where id = ?",
@@ -471,7 +479,7 @@ class SqliteRepo:
                     _map_ref(conn, ev.external_ref, params["id"])
                     inserted += 1
                 elif (
-                    row["ended_at"] is not None
+                    row["ended_at"] != params["ended_at"]
                     or any(row[c] != params[c] for c in _COMPARED)
                     or (not ev.feed_managed and row["last_confirmed_at"] != params["last_confirmed_at"])
                 ):
@@ -483,7 +491,7 @@ class SqliteRepo:
                           geometry = :geometry, lng = :lng, lat = :lat, radius_m = :radius_m,
                           h3_r10 = :h3_r10, h3_r9 = :h3_r9, h3_r7 = :h3_r7, severity = :severity,
                           expires_at = :expires_at, occurred_at = :occurred_at,
-                          ended_at = null, updated_at = :now
+                          ended_at = :ended_at, updated_at = :now
                         where id = :id
                         """,
                         params,
@@ -494,7 +502,8 @@ class SqliteRepo:
         self, category: str, lng: float, lat: float, occurred_at: datetime, radius_m: float
     ) -> list[Event]:
         """Events a new report at (lng, lat, occurred_at) could describe: same
-        category group, occurred_at within MERGE_WINDOW, centroid within
+        category group, occurred_at within MERGE_WINDOW (or the event started
+        earlier and was in progress at occurred_at), centroid within
         max(radius_m, event radius) metres, and not ended more than MERGE_WINDOW
         before occurred_at. Sorted by distance."""
         with _tx() as conn:
@@ -527,7 +536,7 @@ class SqliteRepo:
         are never folded into another row (see upsert_events), so every ref of a
         snapshot source is the external_ref of its own row. A row that started as
         a news report carries a news ref, which no snapshot source's prefix
-        matches (news sources have snapshot = False); it ends by half-life decay.
+        matches (news sources have snapshot = False); its end follows scoring.event_end.
         A structured row with news reports folded in is ended here when its feed
         drops it, which is the intended behaviour.
         """

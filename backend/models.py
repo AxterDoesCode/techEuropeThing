@@ -183,8 +183,9 @@ class Event(BaseModel):
     expires_at: datetime | None = None
     # Set when the event left its feed, or when a report said it was over
     ended_at: datetime | None = None
-    # Evidence that the event is in progress: the extractor of a report said so.
-    # A one-off incident has is_ongoing False and counts as ended at occurred_at.
+    # A report said the event was in progress. It stays set when the event ends
+    # (ended_at, expires_at or the freshness window give the end). A one-off
+    # incident has is_ongoing False and counts as ended at occurred_at.
     is_ongoing: bool = False
     # True for events of snapshot feeds. Such an event is in progress until
     # ended_at or expires_at; the freshness window is not applied to it.

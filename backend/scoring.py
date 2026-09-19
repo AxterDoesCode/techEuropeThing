@@ -241,7 +241,7 @@ def merge(existing: Event, new: Event) -> Event:
     is_ongoing = existing.is_ongoing or new.is_ongoing
     severity = max(existing.severity, new.severity)
     if new.resolution is not None and not existing.feed_managed:
-        is_ongoing = False
+        # is_ongoing is kept: without it the end would move back to occurred_at
         ended_at = min(existing.ended_at or new_confirmed, new_confirmed)
         if new.resolution == "false_alarm":
             severity = 0.0
