@@ -44,19 +44,26 @@ def is_pollable(source_id: str) -> bool:
     return llm.is_configured() or not getattr(source, "requires_llm", False)
 
 
-def _items_to_extract(source: StructuredSource, repo: "Repo", items: list[RawItem]) -> list[RawItem]:
-    """Items worth an extraction: pre-filter candidates that were not already
-    extracted by the current extractor. Repos without the bookkeeping methods
-    (test doubles) extract every candidate on every poll."""
+def _items_to_extract(
+    source: StructuredSource, repo: "Repo", items: list[RawItem]
+) -> tuple[list[RawItem], set[str]]:
+    """Items to extract in this poll, and the ids of pending items deferred to later
+    polls. Items to extract are pre-filter candidates not already extracted by the
+    current extractor. Repos without the bookkeeping methods (test doubles) extract
+    every candidate on every poll."""
     is_candidate = getattr(source, "is_candidate", None)
     candidates = [i for i in items if is_candidate is None or is_candidate(i)]
     pending_extraction = getattr(repo, "pending_extraction", None)
     if pending_extraction is None:
-        return candidates
+        return candidates, set()
     pending = set(
         pending_extraction(source.id, [i.external_id for i in candidates], extraction.extractor_id())
     )
-    return [i for i in candidates if i.external_id in pending]
+    # Feeds list the newest items first. The cap bounds the duration of one poll;
+    # items beyond it stay pending and are extracted by the following polls.
+    todo = [i for i in candidates if i.external_id in pending]
+    deferred = {i.external_id for i in todo[MAX_EXTRACTIONS_PER_POLL:]}
+    return todo[:MAX_EXTRACTIONS_PER_POLL], deferred
 
 
 def _extract_one(to_events: Callable[..., tuple[list[Event], int]], item: RawItem, lookup: Any):
@@ -86,6 +93,10 @@ class Repo(Protocol):
     def replace_cell_scores(self, scores: list[CellScore], now: datetime) -> None: ...
 
 
+# Upper bound of LLM extractions started by one poll. With 4 extraction containers and
+# at most 90 s per item, a poll then takes at most about 3 minutes.
+MAX_EXTRACTIONS_PER_POLL = 8
+
 # Runs the extraction of several items and returns, per item, its events and the
 # number of LLM requests, or None when that item's extraction failed. On Modal this
 # starts one container per item.
@@ -111,11 +122,12 @@ def run_poll(source: StructuredSource, repo: Repo, map_items: ItemMapper | None 
         events: list[Event] = []
         llm_calls = 0
         failed: set[str] = set()
+        deferred: set[str] = set()
         to_events = getattr(source, "to_events", None)
         if to_events is None:
             per_item = [(item, [ev] if (ev := source.to_event(item)) is not None else []) for item in items]
         else:
-            todo = _items_to_extract(source, repo, items)
+            todo, deferred = _items_to_extract(source, repo, items)
             if map_items is not None:
                 results = map_items(todo)
             else:
@@ -148,7 +160,8 @@ def run_poll(source: StructuredSource, repo: Repo, map_items: ItemMapper | None 
         seen_refs = [ev.external_ref or "" for ev in events]
         mark_extracted = getattr(repo, "mark_extracted", None)
         if to_events is not None and mark_extracted is not None:
-            extracted_ids = [i.external_id for i in items if i.external_id not in failed]
+            # Items rejected by the pre-filter are marked too, so they are not considered again
+            extracted_ids = [i.external_id for i in items if i.external_id not in failed | deferred]
             mark_extracted(source.id, extracted_ids, extraction.extractor_id())
 
         # An empty result from a snapshot feed is treated as an upstream fault, not

@@ -145,3 +145,16 @@ def test_llm_only_feed_does_not_fall_back_to_rules(repo, monkeypatch):
 
     # a feed that allows the fallback still produces the rule-based event
     assert run_poll(Feed([raw("a", STABBING)]), repo)["inserted"] == 1
+
+
+def test_extractions_per_poll_are_capped_and_the_rest_follow(repo):
+    from backend.pipeline import MAX_EXTRACTIONS_PER_POLL
+
+    n = MAX_EXTRACTIONS_PER_POLL + 3
+    feed = Feed([raw(f"id{i}", f"Assault in Camden High Street number {i}") for i in range(n)])
+    run_poll(feed, repo)
+    assert len(feed.extracted) == MAX_EXTRACTIONS_PER_POLL
+    run_poll(feed, repo)
+    assert sorted(feed.extracted) == sorted(f"id{i}" for i in range(n))
+    run_poll(feed, repo)
+    assert len(feed.extracted) == n

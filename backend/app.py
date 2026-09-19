@@ -164,7 +164,7 @@ def geocode_place(place_text: str):
     return geocode.geocode(place_text)
 
 
-@app.function(timeout=300, max_containers=EXTRACT_CONCURRENCY, secrets=secrets)
+@app.function(timeout=120, max_containers=EXTRACT_CONCURRENCY, secrets=secrets)
 def extract_item(source_id: str, raw):
     """One extraction agent run: one news item -> (events, LLM requests)."""
     from . import geocode
@@ -174,7 +174,9 @@ def extract_item(source_id: str, raw):
     return SOURCES[source_id].to_events(raw, RemoteRepo())
 
 
-@app.function(timeout=900, max_containers=20, secrets=secrets)
+# The time limit is below the shortest poll interval of an LLM source (300 s), so a
+# poll has ended, one way or the other, before the dispatcher starts the next one.
+@app.function(timeout=280, max_containers=20, secrets=secrets)
 def poll_source(source_id: str) -> dict[str, int]:
     from . import geocode
     from .pipeline import SOURCES, run_poll
