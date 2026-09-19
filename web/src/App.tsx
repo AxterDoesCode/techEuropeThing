@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { API_BASE, CRIME_REFRESH_MS, fetchAgents, fetchCrimePoints, POLL_INTERVAL_MS } from './api'
+import { ALERTS_REFRESH_MS, API_BASE, CRIME_REFRESH_MS, fetchAgents, fetchAlerts, fetchCrimePoints, POLL_INTERVAL_MS } from './api'
 import { usePolling } from './usePolling'
 import { useLiveEvents } from './useLiveEvents'
 import { RiskMap, type MapTarget } from './map/RiskMap'
@@ -9,6 +9,7 @@ import { AgentPanel } from './panels/AgentPanel'
 import { LayerPanel } from './panels/LayerPanel'
 import { RoutePanel } from './panels/RoutePanel'
 import { SearchBox } from './panels/SearchBox'
+import { AlertBanner } from './panels/AlertBanner'
 import { useRouteState } from './route'
 import { formatCoord } from './format'
 import { useTheme } from './theme'
@@ -28,6 +29,7 @@ export default function App() {
   }, [agentRuns])
   const agents = usePolling(loadAgents, POLL_INTERVAL_MS)
   const crime = usePolling(fetchCrimePoints, CRIME_REFRESH_MS)
+  const alerts = usePolling(fetchAlerts, ALERTS_REFRESH_MS)
   const [settings, updateSettings] = useLayerSettings()
 
   const [selectedId, setSelectedId] = useState<string | null>(null)
@@ -130,6 +132,7 @@ export default function App() {
         routeEndpoints={routeEndpoints}
         picking={routing.picking !== null}
       />
+      <AlertBanner alerts={alerts.data} sidebarOpen={sidebarOpen} />
       {/* Kept mounted while collapsed so the panels keep their state */}
       <aside className="left" hidden={!sidebarOpen}>
         <header className="panel header">
