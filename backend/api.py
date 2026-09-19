@@ -10,13 +10,16 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from . import db
 from .api_inject import router as inject_router
-from .models import Category, CellScore, Event, utcnow
-from .scoring import COARSE_RES, FINE_RES, MIN_EVENT_RISK, event_risk
+from .api_stream import router as stream_router
+from .features import event_feature
+from .models import Category, CellScore, utcnow
+from .scoring import COARSE_RES, FINE_RES, MIN_EVENT_RISK
 
 web = FastAPI(title="London Live Risk Map API")
 web.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 web.add_middleware(GZipMiddleware, minimum_size=10_000)
 web.include_router(inject_router)
+web.include_router(stream_router)
 
 
 def _parse_bbox(bbox: str | None) -> tuple[float, float, float, float] | None:
@@ -29,12 +32,6 @@ def _parse_bbox(bbox: str | None) -> tuple[float, float, float, float] | None:
     return w, s, e, n
 
 
-def _feature(ev: Event, now: datetime) -> dict[str, Any]:
-    props = ev.model_dump(mode="json", exclude={"geometry", "source_confidence", "raw_item_ids"})
-    props["risk"] = round(event_risk(ev, now), 4)
-    return {"type": "Feature", "id": str(ev.id), "geometry": ev.geometry, "properties": props}
-
-
 @web.get("/api/events")
 def get_events(
     bbox: str | None = None,
@@ -44,7 +41,7 @@ def get_events(
 ) -> dict[str, Any]:
     now = utcnow()
     events = db.events_geojson(now, _parse_bbox(bbox), since, category.value if category else None)
-    features = [_feature(ev, now) for ev in events]
+    features = [event_feature(ev, now) for ev in events]
     if active:
         features = [f for f in features if f["properties"]["risk"] >= MIN_EVENT_RISK]
     return {"type": "FeatureCollection", "features": features}
@@ -55,7 +52,7 @@ def get_event(event_id: UUID) -> dict[str, Any]:
     ev = db.event_by_id(event_id)
     if ev is None:
         raise HTTPException(404, "event not found")
-    return _feature(ev, utcnow())
+    return event_feature(ev, utcnow())
 
 
 @web.get("/api/cells")

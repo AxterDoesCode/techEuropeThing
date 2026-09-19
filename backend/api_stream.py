@@ -31,7 +31,7 @@ from fastapi.responses import StreamingResponse
 from starlette.concurrency import run_in_threadpool
 
 from . import db
-from .api import _feature
+from .features import event_feature
 from .models import utcnow
 from .scoring import MIN_EVENT_RISK
 
@@ -84,7 +84,7 @@ def change_frames(changes: dict[str, Any], now: datetime, sent: Sent, mark: str)
         if sent.events.get(event_id) == updated_at:
             continue
         sent.events[event_id] = updated_at
-        feature = _feature(ev, now)
+        feature = event_feature(ev, now)
         if ev.ended_at is not None or feature["properties"]["risk"] < MIN_EVENT_RISK:
             frames.append(sse_frame("event_end", {"id": event_id}, mark))
         else:

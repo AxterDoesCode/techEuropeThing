@@ -11,7 +11,7 @@ import sys
 from pathlib import Path
 from uuid import uuid4
 
-from ..api import _feature
+from ..features import event_feature
 from ..models import utcnow
 from ..pipeline import SOURCES
 from ..scoring import compute_cell_scores
@@ -30,7 +30,7 @@ def main(out_dir: str) -> None:
                 ev.id = uuid4()
                 events.append(ev)
     scores = compute_cell_scores(events, now)
-    features = [_feature(ev, now) for ev in events]
+    features = [event_feature(ev, now) for ev in events]
     (out / "events.json").write_text(
         json.dumps({"type": "FeatureCollection", "features": features})
     )
