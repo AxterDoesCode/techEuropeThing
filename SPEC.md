@@ -70,7 +70,7 @@ Modal cron: rescore (every 1 min)
    recompute cell_scores for cells touched by active events; expire dead events
 
 FastAPI (modal.asgi_app)
-   GET /api/cells, /api/events, /api/agents, /api/stream (SSE), POST /api/inject, POST /api/route
+   GET /api/cells, /api/events, /api/agents, /api/stream (SSE), POST /api/route
 
 React client
    MapLibre globe + deck.gl layers, polls or subscribes to /api/stream
@@ -81,7 +81,7 @@ A single dispatcher cron is used instead of one cron per source because Modal's 
 ### Agent types
 
 1. **Structured pollers** — TfL road (`tfl_road`), TfL station disruptions (`tfl_transit`), EA floods (`ea_floods`), police.uk (one-off `backfill_police`). Deterministic field mapping. No LLM. Open-Meteo is not built. A snapshot source ends events that leave its feed; an empty fetch ends nothing unless the source sets `empty_is_valid` (floods: no warnings is the normal state).
-2. **Extraction agents** — RSS news feeds, manual inject, later social sources. Implemented so far: `met_news` with the code pre-filter, the geocoder, and a rule-based extractor (`extract_rules.py`: keyword category/severity, place from headline patterns, one incident per item) that is used while no LLM is configured. Met statements are published hours after the incident, so `met_news` events use a 24 h half-life instead of the category default. A tool-using LLM agent (`pydantic-ai`) with output type `list[ExtractedEvent]`; one article can describe zero, one or several incidents.
+2. **Extraction agents** — RSS news feeds, later social sources. Implemented so far: `met_news` with the code pre-filter, the geocoder, and a rule-based extractor (`extract_rules.py`: keyword category/severity, place from headline patterns, one incident per item) that is used while no LLM is configured. Met statements are published hours after the incident, so `met_news` events use a 24 h half-life instead of the category default. A tool-using LLM agent (`pydantic-ai`) with output type `list[ExtractedEvent]`; one article can describe zero, one or several incidents.
 
 ### Extraction agent
 
@@ -185,7 +185,6 @@ An incoming structured event is never folded into another row, including a news 
 | GET | `/api/events/{id}` | Full event with sources and URLs |
 | GET | `/api/agents` | Per source: enabled, interval, last run, last status, counts for the last hour |
 | GET | `/api/stream?since=` | SSE (`backend/api_stream.py`): `hello`, `event_upsert`, `event_end`, `cells_changed`, `agent_run`. Details below |
-| POST | `/api/inject` | `{text, source_label}` -> runs the unstructured pipeline on submitted text. For demos; events created this way carry `source_ids=['manual']` |
 | POST | `/api/route` | Phase 2. `{origin, destination, alpha}` -> `{fast, safe}` each with GeoJSON LineString, length, duration, mean and max risk |
 
 One response shape per endpoint, generated from the Pydantic models. Coordinates in API responses are always GeoJSON order `[lng, lat]`.
@@ -265,7 +264,6 @@ backend/
   routing.py        compact graph format, edge risk and costs, fast/safe shortest paths
   api_route.py      POST /api/route
   api_stream.py     GET /api/stream (SSE)
-  api_inject.py     POST /api/inject
   features.py       GeoJSON form of an event
   extraction.py     pre-filter, then LLM agent or rule-based extractor
   llm.py            pydantic-ai extraction agent, tools, guardrails
@@ -287,7 +285,7 @@ Optional Modal secret `london-risk`: `TFL_APP_KEY`, `LLM_MODEL` and the matching
 4. Frontend globe with hexagon and event layers reading the live API.
 5. Remaining structured pollers (TfL lines/stops, EA floods). Dispatcher cron. `/api/agents` and the fleet panel.
 6. police.uk baseline backfill (one-off job, 12 months, tiled over the bbox with `poly=`).
-7. Extraction agent path: pre-filter, geocode tool, `fetch_article`, `find_similar_events`, BBC RSS source, merge, the Met feed. `/api/inject`.
+7. Extraction agent path: pre-filter, geocode tool, `fetch_article`, `find_similar_events`, BBC RSS source, merge, the Met feed.
 8. SSE, time slider, visual polish.
 9. Phase 2 routing.
 10. Stretch: corroboration agent, LFB data, lighting.
