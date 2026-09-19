@@ -265,6 +265,10 @@ def find_similar_events(
 # ---------------------------------------------------------------- agent
 
 
+def get_model_name() -> str:
+    return os.environ.get("LLM_MODEL", "").strip()
+
+
 def is_configured() -> bool:
     return bool(os.environ.get("LLM_MODEL", "").strip())
 

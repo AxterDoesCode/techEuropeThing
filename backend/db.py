@@ -50,6 +50,10 @@ def connect(path: str | Path) -> None:
         _conn.execute("pragma journal_mode = wal")
         _conn.execute("pragma foreign_keys = on")
         _conn.executescript(SCHEMA_PATH.read_text())
+        # Columns added after the first deployment
+        columns = {r["name"] for r in _conn.execute("pragma table_info(raw_items)")}
+        if "extracted_with" not in columns:
+            _conn.execute("alter table raw_items add column extracted_with text")
         _conn.commit()
 
 
@@ -395,6 +399,25 @@ class SqliteRepo:
         before occurred_at. Sorted by distance."""
         with _tx() as conn:
             return _merge_candidates(conn, Category(category), lng, lat, occurred_at, radius_m)
+
+    def pending_extraction(self, source_id: str, external_ids: list[str], extractor: str) -> list[str]:
+        """Items not yet extracted by `extractor` in their current version. An
+        edited article, or a change of extractor (rules -> an LLM), makes an item pending again."""
+        with _tx() as conn:
+            rows = conn.execute(
+                "select external_id, payload_hash, extracted_with from raw_items where source_id = ?",
+                [source_id],
+            ).fetchall()
+        done = {r["external_id"] for r in rows if r["extracted_with"] == f"{extractor}:{r['payload_hash']}"}
+        return [i for i in external_ids if i not in done]
+
+    def mark_extracted(self, source_id: str, external_ids: list[str], extractor: str) -> None:
+        with _tx() as conn:
+            conn.executemany(
+                "update raw_items set extracted_with = ? || ':' || payload_hash"
+                " where source_id = ? and external_id = ?",
+                [(extractor, source_id, i) for i in external_ids],
+            )
 
     def end_missing(self, source_id: str, seen_refs: Iterable[str], at: datetime) -> int:
         """Mark events of a snapshot source that were not in the latest fetch as ended.

@@ -436,9 +436,9 @@ def test_pipeline_multi_event_items_llm_calls_and_lookup(monkeypatch):
     lookups = []
     original = extraction.extract_events
 
-    def spy(article, source_id, source_type, lookup=None):
+    def spy(article, source_id, source_type, lookup=None, rules_fallback=True):
         lookups.append(lookup)
-        return original(article, source_id, source_type, lookup)
+        return original(article, source_id, source_type, lookup, rules_fallback)
 
     monkeypatch.setattr("backend.sources.rss.extract_events", spy)
 
@@ -451,12 +451,13 @@ def test_pipeline_multi_event_items_llm_calls_and_lookup(monkeypatch):
     assert counts == {"fetched": 2, "inserted": 2, "ended": 0, "llm_calls": 2}
     assert set(repo.events) == {"bbc_london:item-1", "bbc_london:item-1#2"}
     assert all(ev.raw_item_ids == [1] for ev in repo.events.values())
-    assert lookups == [repo, repo]
+    # the second feed item fails the pre-filter, so no extraction is started for it
+    assert lookups == [repo]
 
     # a repo without find_merge_candidates is not passed as the lookup
     lookups.clear()
     run_poll(FeedSource("bbc_london", "u", "news"), MemoryRepo())
-    assert lookups == [None, None]
+    assert lookups == [None]
 
 
 # ---------------------------------------------------------------- inject endpoint

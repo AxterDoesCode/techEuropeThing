@@ -16,6 +16,7 @@ from ..extraction import extract_events
 from ..llm import SimilarEventLookup
 from ..located import Article
 from ..models import Event, RawItem
+from ..prefilter import is_incident_candidate
 
 
 def _text(value: str | None) -> str:
@@ -70,9 +71,17 @@ class RssNewsSource:
             guid=raw.external_id,
         )
 
+    def is_candidate(self, raw: RawItem) -> bool:
+        """Headline pre-filter. The pipeline uses it to avoid starting an
+        extraction for items that cannot be incidents."""
+        return is_incident_candidate(raw.payload["title"], raw.payload.get("description") or "")
+
     def to_events(self, raw: RawItem, lookup: SimilarEventLookup | None = None) -> tuple[list[Event], int]:
         """Events of one item and the number of LLM requests made for it."""
-        return extract_events(self.article(raw), self.id, self.source_type, lookup)
+        # Feeds that need an LLM get no rule-based fallback: the rules are not
+        # accurate enough on general news, so a failed item is retried instead.
+        rules_fallback = not getattr(self, "requires_llm", False)
+        return extract_events(self.article(raw), self.id, self.source_type, lookup, rules_fallback)
 
     def to_event(self, raw: RawItem) -> Event | None:
         """First event of the item. The pipeline uses `to_events`."""
@@ -87,3 +96,17 @@ class BbcLondonSource(RssNewsSource):
 
     def __init__(self) -> None:
         super().__init__("bbc_london", "https://feeds.bbci.co.uk/news/england/london/rss.xml", "news")
+
+
+class EveningStandardSource(RssNewsSource):
+    requires_llm = True
+
+    def __init__(self) -> None:
+        super().__init__("standard_london", "https://www.standard.co.uk/news/london/rss", "news")
+
+
+class MyLondonSource(RssNewsSource):
+    requires_llm = True
+
+    def __init__(self) -> None:
+        super().__init__("mylondon", "https://www.mylondon.news/news/?service=rss", "news")

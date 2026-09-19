@@ -10,7 +10,7 @@ import re
 import threading
 import time
 from dataclasses import asdict, dataclass
-from typing import Any, Protocol
+from typing import Any, Callable, Protocol
 
 import httpx
 
@@ -46,6 +46,17 @@ _store: GeocodeCache | None = None
 def use_cache(store: GeocodeCache | None) -> None:
     global _store
     _store = store
+
+
+# When set, lookups are delegated to this callable. On Modal it calls a function
+# that runs in a single container, so the Nominatim limit of 1 request per second
+# holds across all extraction containers.
+_remote: Callable[[str], "GeoResult | None"] | None = None
+
+
+def use_remote(remote: Callable[[str], "GeoResult | None"] | None) -> None:
+    global _remote
+    _remote = remote
 _nominatim_lock = threading.Lock()
 _last_nominatim_call = 0.0
 
@@ -54,6 +65,8 @@ def geocode(place_text: str) -> GeoResult | None:
     key = " ".join(place_text.lower().split())
     if not key:
         return None
+    if _remote is not None:
+        return _remote(place_text)
     if key in _cache:
         return _cache[key]
     if _store is not None and (row := _store.geocode_get(key)) is not None:
