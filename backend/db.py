@@ -463,6 +463,12 @@ class SqliteRepo:
                 "insert into agent_runs (source_id, started_at) values (?, ?)",
                 [source_id, _ts(started_at)],
             )
+            # The source counts as polled from the start of the run. A poll that
+            # runs longer than the dispatcher's tick would otherwise be started
+            # again while it is still running.
+            conn.execute(
+                "update sources set last_polled_at = ? where id = ?", [_ts(started_at), source_id]
+            )
             return cur.lastrowid
 
     def finish_run(

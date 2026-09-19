@@ -130,3 +130,10 @@ def test_removed_source_is_cleaned_up_on_connect(tmp_path):
     db.connect(path)
     assert not any(a["id"] == "reddit_london" for a in db.agent_status())
     assert any(a["id"] == "tfl_road" for a in db.agent_status())
+
+
+def test_a_running_poll_is_not_due_again(repo):
+    assert "tfl_road" in repo.due_sources(utcnow())
+    repo.start_run("tfl_road", utcnow())  # poll started, not finished
+    assert "tfl_road" not in repo.due_sources(utcnow())
+    assert "tfl_road" in repo.due_sources(utcnow() + timedelta(seconds=121))
