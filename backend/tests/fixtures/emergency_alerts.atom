@@ -1,0 +1,250 @@
+<?xml version='1.0' encoding='utf-8'?>
+<?xml-stylesheet href="feed.xsl" type="text/xsl"?>
+<feed xmlns="http://www.w3.org/2005/Atom" xml:lang="en-US">
+  <id>https://www.gov.uk/alerts/feed.atom</id>
+  <title>Emergency Alerts</title>
+  <updated>2026-09-19T00:00:01.798868+00:00</updated>
+  <author>
+    <name>Emergency Alerts Service</name>
+    <uri>https://www.gov.uk/contact/govuk</uri>
+  </author>
+  <link href="https://www.gov.uk/alerts/feed.atom" rel="self" type="application/atom+xml"/>
+  <link href="https://www.gov.uk/alerts" rel="via" type="application/html"/>
+  <link href="https://www.gov.uk/alerts" rel="alternate" type="application/html"/>
+  <generator>gov.uk</generator>
+  <icon>/alerts/assets/images/favicon-7ba3f3e7.ico</icon>
+  <logo>/alerts/assets/images/govuk-opengraph-image-06d5b7ee.png</logo>
+  <rights>Released under the Open Government Licence (OGL), citation of publisher and online resource required on reuse.</rights>
+  <subtitle>GOV.UK Emergency Alerts</subtitle>
+    <!-- Test fixture. Entries copied unchanged from https://www.gov.uk/alerts/feed.atom on
+       2026-09-19, except the last two (ids starting "synthetic-"), which are SYNTHETIC:
+       the live feed had no alert in force, so the form of an entry without a
+       "Stopped" stamp is an assumption. -->
+  <entry>
+    <id>https://www.gov.uk/alerts/25-may-2021</id>
+    <title>East Suffolk</title>
+    <updated>2021-05-25T12:00:14.104546+00:00</updated>
+    <author>
+      <name>Emergency Alerts Service</name>
+      <uri>https://www.gov.uk/contact/govuk</uri>
+    </author>
+    <content type="xhtml">
+      <div xmlns="http://www.w3.org/1999/xhtml">
+        <div>
+          <p>
+            <strong>Stopped sending at 1:20pm (BST) on Tuesday 25 May 2021</strong>
+          </p>
+          <p>The UK government is testing Emergency Alerts in East Suffolk.
+
+Emergency alerts tell you what to do if there's a life-threatening event nearby.
+
+To find out more, call 0808 1697692 or search for gov.uk/alerts</p>
+        </div>
+      </div>
+    </content>
+    <link href="https://www.gov.uk/alerts/25-may-2021"/>
+    <summary>Alert area: East Suffolk. Sent: 1:00pm (BST) on Tuesday 25 May 2021 [2021-05-25 13:00 BST]. Stopped: 1:20pm (BST) on Tuesday 25 May 2021 [2021-05-25 13:20 BST]</summary>
+    <published>2021-05-25T13:00:14.104546+01:00</published>
+  </entry>
+  <entry>
+    <id>https://www.gov.uk/alerts/23-apr-2023</id>
+    <title>England, Northern Ireland, Scotland</title>
+    <updated>2023-04-23T13:59:07.113824+00:00</updated>
+    <author>
+      <name>Emergency Alerts Service</name>
+      <uri>https://www.gov.uk/contact/govuk</uri>
+    </author>
+    <content type="xhtml">
+      <div xmlns="http://www.w3.org/1999/xhtml">
+        <div>
+          <p>
+            <strong>Stopped sending at 3:21pm (BST) on Sunday 23 April 2023</strong>
+          </p>
+          <p>This is a test of Emergency Alerts, a new UK government service that will warn you if there's a life-threatening emergency nearby.
+
+In a real emergency, follow the instructions in the alert to keep yourself and others safe.
+
+Visit gov.uk/alerts for more information.
+
+This is a test. You do not need to take any action.</p>
+        </div>
+      </div>
+    </content>
+    <link href="https://www.gov.uk/alerts/23-apr-2023"/>
+    <summary>Alert area: England, Northern Ireland, Scotland. Sent: 2:59pm (BST) on Sunday 23 April 2023 [2023-04-23 14:59 BST]. Stopped: 3:21pm (BST) on Sunday 23 April 2023 [2023-04-23 15:21 BST]</summary>
+    <published>2023-04-23T14:59:07.113824+01:00</published>
+  </entry>
+  <entry>
+    <id>https://www.gov.uk/alerts/23-feb-2024</id>
+    <title>Plymouth</title>
+    <updated>2024-02-23T12:06:02.969020+00:00</updated>
+    <author>
+      <name>Emergency Alerts Service</name>
+      <uri>https://www.gov.uk/contact/govuk</uri>
+    </author>
+    <content type="xhtml">
+      <div xmlns="http://www.w3.org/1999/xhtml">
+        <div>
+          <p>
+            <strong>Stopped sending at 5:58pm (GMT) on Friday 23 February 2024</strong>
+          </p>
+          <p>Issued by Plymouth City Council. The WWII bomb found in Keyham will be transported today 23 February 2024 at 2pm to Torpoint Ferry slipway via Saltash Road. A time limited cordon will be in place along this route between 2pm until an estimated 5pm. You are asked to leave and stay away from the cordoned area for this time period.
+
+For more information about the route, cordon and support - go to the Plymouth City Council website. Visit gov.uk/alerts for more information.</p>
+        </div>
+      </div>
+    </content>
+    <link href="https://www.gov.uk/alerts/23-feb-2024"/>
+    <summary>Alert area: Plymouth. Sent: 12:06pm (GMT) on Friday 23 February 2024 [2024-02-23 12:06 GMT]. Stopped: 5:58pm (GMT) on Friday 23 February 2024 [2024-02-23 17:58 GMT]</summary>
+    <published>2024-02-23T12:06:02.969020+00:00</published>
+  </entry>
+  <entry>
+    <id>https://www.gov.uk/alerts/6-dec-2024-3</id>
+    <title>Cardiff</title>
+    <updated>2024-12-06T19:41:12.248632+00:00</updated>
+    <author>
+      <name>Emergency Alerts Service</name>
+      <uri>https://www.gov.uk/contact/govuk</uri>
+    </author>
+    <content type="xhtml">
+      <div xmlns="http://www.w3.org/1999/xhtml">
+        <div>
+          <p>
+            <strong>Stopped sending at 11:01am (GMT) on Saturday 07 December 2024</strong>
+          </p>
+          <p>Cyhoeddir gan Lywodraeth y DU
+
+Am ragor o wybodaeth, chwiliwch ar-lein am 'gov.uk/alerts' neu rybuddion a chyngor y Swyddfa Dywydd.
+
+Issued by the UK Government
+
+A RED warning for wind has been issued in your area. Extremely strong winds associated with Storm Darragh are expected to cause significant disruption from 3.00am on Saturday 07 December 2024. Strong winds can cause flying debris, falling trees and large waves around coastal areas, all of which can present a danger to life. Stay indoors if you can. It is not safe to drive in these conditions.
+
+The storm may damage infrastructure causing power cuts and disruption to mobile phone coverage. Consider gathering torches, batteries, a mobile phone power pack and other essential items you already have at home.
+
+Stay up to date with the weather forecast for your area and follow advice from emergency services, network operators and local authorities. For more information search online for 'gov.uk/alerts' or Met Office warnings and advice.</p>
+        </div>
+      </div>
+    </content>
+    <link href="https://www.gov.uk/alerts/6-dec-2024-3"/>
+    <summary>Alert area: Cardiff. Sent: 7:41pm (GMT) on Friday 06 December 2024 [2024-12-06 19:41 GMT]. Stopped: 11:01am (GMT) on Saturday 07 December 2024 [2024-12-07 11:01 GMT]</summary>
+    <published>2024-12-06T19:41:12.248632+00:00</published>
+  </entry>
+  <entry>
+    <id>https://www.gov.uk/alerts/7-sep-2025</id>
+    <title>England, Northern Ireland, Scotland, Wales</title>
+    <updated>2025-09-07T14:00:04.667177+00:00</updated>
+    <author>
+      <name>Emergency Alerts Service</name>
+      <uri>https://www.gov.uk/contact/govuk</uri>
+    </author>
+    <content type="xhtml">
+      <div xmlns="http://www.w3.org/1999/xhtml">
+        <div>
+          <p>
+            <strong>Stopped sending at 3:20pm (BST) on Sunday 07 September 2025</strong>
+          </p>
+          <p>This is a test of Emergency Alerts, a UK government service that will warn you if there's a life-threatening emergency nearby.
+
+You do not need to take any action. In a real emergency, follow the instructions in the alert to keep yourself and others safe.
+
+Find simple and effective advice on how to prepare for emergencies at gov.uk/prepare.
+
+Visit gov.uk/alerts for more information or to view this message in Welsh.
+Ewch i gov.uk/alerts am ragor o wybodaeth neu i weld y neges hon yn y Gymraeg.</p>
+        </div>
+      </div>
+    </content>
+    <link href="https://www.gov.uk/alerts/7-sep-2025"/>
+    <summary>Alert area: England, Northern Ireland, Scotland, Wales. Sent: 3:00pm (BST) on Sunday 07 September 2025 [2025-09-07 15:00 BST]. Stopped: 3:20pm (BST) on Sunday 07 September 2025 [2025-09-07 15:20 BST]</summary>
+    <published>2025-09-07T15:00:04.667177+01:00</published>
+  </entry>
+  <entry>
+    <id>https://www.gov.uk/alerts/14-aug-2026</id>
+    <title>Wales</title>
+    <updated>2026-08-14T17:57:08.953056+00:00</updated>
+    <author>
+      <name>Emergency Alerts Service</name>
+      <uri>https://www.gov.uk/contact/govuk</uri>
+    </author>
+    <content type="xhtml">
+      <div xmlns="http://www.w3.org/1999/xhtml">
+        <div>
+          <p>
+            <strong>Stopped sending at 11:00pm (BST) on Friday 14 August 2026</strong>
+          </p>
+          <p>Anfonwyd gan Lywodraeth y DU
+
+Mae yna berygl difrifol o dân ar draws y genedl. Ni ddylai trigolion, tirfeddianwyr nac ymwelwyr ymgymryd ag unrhyw weithgaredd a allai achosi tân, gan gynnwys barbeciwiau tafladwy, pyllau tân, llosgyddion gardd neu dân gwyllt. Gall hyd yn oed fflam fach ddatblygu'n gyflym yn dân gwyllt mawr, gan beryglu bywydau, cartrefi, busnesau ac ymatebwyr brys.
+
+Dilynwch y diweddariadau swyddogol ac adroddwch arwyddion o dân ar unwaith drwy ffonio 999. Edrychwch ar gov.uk/alerts am fwy o wybodaeth</p>
+        </div>
+      </div>
+    </content>
+    <link href="https://www.gov.uk/alerts/14-aug-2026"/>
+    <summary>Alert area: Wales. Sent: 6:57pm (BST) on Friday 14 August 2026 [2026-08-14 18:57 BST]. Stopped: 11:00pm (BST) on Friday 14 August 2026 [2026-08-14 23:00 BST]</summary>
+    <published>2026-08-14T18:57:08.953056+01:00</published>
+  </entry>
+  <entry>
+    <id>https://www.gov.uk/alerts/14-aug-2026-2</id>
+    <title>England, Wales</title>
+    <updated>2026-08-14T18:01:17.700655+00:00</updated>
+    <author>
+      <name>Emergency Alerts Service</name>
+      <uri>https://www.gov.uk/contact/govuk</uri>
+    </author>
+    <content type="xhtml">
+      <div xmlns="http://www.w3.org/1999/xhtml">
+        <div>
+          <p>
+            <strong>Stopped sending at 11:00pm (BST) on Friday 14 August 2026</strong>
+          </p>
+          <p>Issued by the UK Government
+
+There is a very high risk of wildfires nationally. Residents, landowners and visitors should not undertake any activity that could start a fire, including disposable barbecues, firepits, garden incinerators or fireworks. Even a small flame can rapidly develop into a major wildfire placing lives, homes, businesses and emergency responders at risk.
+
+Follow official updates and report signs of fire immediately by calling 999. Search gov.uk/alerts for more information.</p>
+        </div>
+      </div>
+    </content>
+    <link href="https://www.gov.uk/alerts/14-aug-2026-2"/>
+    <summary>Alert area: England, Wales. Sent: 7:01pm (BST) on Friday 14 August 2026 [2026-08-14 19:01 BST]. Stopped: 11:00pm (BST) on Friday 14 August 2026 [2026-08-14 23:00 BST]</summary>
+    <published>2026-08-14T19:01:17.700655+01:00</published>
+  </entry>
+  <entry>
+    <id>https://www.gov.uk/alerts/synthetic-active-london</id>
+    <title>Camden, Islington, Hertfordshire</title>
+    <updated>2026-09-19T09:30:00.000000+00:00</updated>
+    <content type="xhtml">
+      <div xmlns="http://www.w3.org/1999/xhtml">
+        <div>
+          <p>Issued by the UK Government
+
+SYNTHETIC FIXTURE. A major fire is producing toxic smoke in your area. Stay indoors and keep windows and doors closed.
+
+Search gov.uk/alerts for more information.</p>
+        </div>
+      </div>
+    </content>
+    <link href="https://www.gov.uk/alerts/synthetic-active-london"/>
+    <summary>Alert area: Camden, Islington, Hertfordshire. Sent: 10:30am (BST) on Saturday 19 September 2026 [2026-09-19 10:30 BST]</summary>
+    <published>2026-09-19T10:30:00.000000+01:00</published>
+  </entry>
+  <entry>
+    <id>https://www.gov.uk/alerts/synthetic-active-newport</id>
+    <title>Newport, Londonderry</title>
+    <updated>2026-09-19T09:40:00.000000+00:00</updated>
+    <content type="xhtml">
+      <div xmlns="http://www.w3.org/1999/xhtml">
+        <div>
+          <p>Issued by the UK Government
+
+SYNTHETIC FIXTURE. Severe flooding is happening now.</p>
+        </div>
+      </div>
+    </content>
+    <link href="https://www.gov.uk/alerts/synthetic-active-newport"/>
+    <summary>Alert area: Newport, Londonderry. Sent: 10:40am (BST) on Saturday 19 September 2026 [2026-09-19 10:40 BST]</summary>
+    <published>2026-09-19T10:40:00.000000+01:00</published>
+  </entry>
+</feed>

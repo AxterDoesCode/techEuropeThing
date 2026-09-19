@@ -15,7 +15,7 @@ import threading
 from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any, Iterable, Iterator
+from typing import TYPE_CHECKING, Any, Iterable, Iterator
 from uuid import UUID, uuid4
 
 import h3
@@ -40,6 +40,9 @@ from .scoring import (
     same_time,
     should_merge,
 )
+
+if TYPE_CHECKING:
+    from .alerts import Alert
 
 SCHEMA_PATH = Path(__file__).parent / "sql" / "schema.sql"
 
@@ -675,6 +678,17 @@ class SqliteRepo:
                  r.get("provider"), _ts(utcnow())],
             )
 
+    # Alert feeds. The storage functions are at the end of this file; these methods
+    # make them reachable through Store.call for pollers in other containers.
+    def claim_alerts_poll(self, now: datetime, interval_s: float, sources: list[str]) -> bool:
+        return claim_alerts_poll(now, interval_s, sources)
+
+    def replace_alerts(self, source: str, alerts: list[Alert], fetched_at: datetime) -> dict[str, int]:
+        return replace_alerts(source, alerts, fetched_at)
+
+    def record_alerts_failure(self, source: str, error: str, at: datetime) -> None:
+        record_alerts_failure(source, error, at)
+
 
 # Read queries used by the API
 
@@ -827,3 +841,79 @@ def changes_since(since: datetime, limit: int = 500) -> dict[str, Any]:
         "truncated": truncated,
         "mark": mark,
     }
+
+
+# Official alerts (backend/alerts.py). Not events: nothing here touches scoring.
+
+
+def claim_alerts_poll(now: datetime, interval_s: float, sources: list[str]) -> bool:
+    """True when the alert feeds are due: a source has never been attempted, or the
+    oldest attempt is at least `interval_s` old. The attempt time of every source is
+    then set to `now` in the same transaction, so two callers cannot both get True."""
+    with _tx() as conn:
+        rows = conn.execute("select source, last_attempt_at from alert_polls").fetchall()
+        last = {r["source"]: r["last_attempt_at"] for r in rows}
+        threshold = _ts(now - timedelta(seconds=interval_s))
+        due = any(last.get(s) is None or last[s] <= threshold for s in sources)
+        if due:
+            conn.executemany(
+                "insert into alert_polls (source, last_attempt_at) values (?, ?)"
+                " on conflict (source) do update set last_attempt_at = excluded.last_attempt_at",
+                [(s, _ts(now)) for s in sources],
+            )
+    return due
+
+
+def replace_alerts(source: str, alerts: list[Alert], fetched_at: datetime) -> dict[str, int]:
+    """Make the stored alerts of `source` equal to `alerts`: upsert them and delete
+    the source's other rows, so a withdrawn warning disappears. Called only after a
+    successful fetch; an empty list is a valid result (nothing in force)."""
+    ts = _ts(fetched_at)
+    with _tx() as conn:
+        for a in alerts:
+            if a.source != source:
+                raise ValueError(f"alert {a.id!r} does not belong to source {source!r}")
+            conn.execute(
+                "insert or replace into alerts (id, source, level, hazard, headline, area_text, url,"
+                " starts_at, ends_at, fetched_at, raw) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                [a.id, a.source, a.level, a.hazard, a.headline, a.area_text, a.url, _ts(a.starts_at),
+                 _ts(a.ends_at), ts, json.dumps(a.raw, separators=(",", ":"), ensure_ascii=False)],
+            )
+        keep = [a.id for a in alerts]
+        marks = ",".join("?" * len(keep))
+        deleted = conn.execute(
+            f"delete from alerts where source = ? and id not in ({marks})", [source, *keep]
+        ).rowcount
+        conn.execute(
+            "insert into alert_polls (source, last_attempt_at, last_success_at, last_error) values (?, ?, ?, null)"
+            " on conflict (source) do update set last_success_at = excluded.last_success_at, last_error = null",
+            [source, ts, ts],
+        )
+    return {"stored": len(alerts), "deleted": deleted}
+
+
+def record_alerts_failure(source: str, error: str, at: datetime) -> None:
+    """A failed fetch changes only the poll state; the source's alerts stay."""
+    with _tx() as conn:
+        conn.execute(
+            "insert into alert_polls (source, last_attempt_at, last_error) values (?, ?, ?)"
+            " on conflict (source) do update set last_error = excluded.last_error",
+            [source, _ts(at), error],
+        )
+
+
+def stored_alerts() -> list[dict[str, Any]]:
+    """All stored alerts. Times are returned as datetimes; `raw` is left out.
+    `fetched_at` is the time of the last successful poll that listed the alert."""
+    with _tx() as conn:
+        rows = conn.execute(
+            "select a.id, a.source, a.level, a.hazard, a.headline, a.area_text, a.url, a.starts_at,"
+            " a.ends_at, a.fetched_at from alerts a order by a.starts_at, a.id"
+        ).fetchall()
+    out = []
+    for r in rows:
+        d = dict(r)
+        for key in ("starts_at", "ends_at", "fetched_at"):
+            d[key] = datetime.fromisoformat(d[key]) if d[key] else None
+        out.append(d)
+    return out

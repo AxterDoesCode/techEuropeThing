@@ -142,3 +142,30 @@ delete from events where external_ref like 'x_london:%';
 delete from agent_runs where source_id = 'x_london';
 delete from raw_items where source_id = 'x_london';
 delete from sources where id = 'x_london';
+
+-- Official wide-area alerts (Met Office weather warnings, UK Emergency Alerts).
+-- Not events: they are not scored and do not affect routing. Each successful
+-- poll replaces all rows of its source (backend/alerts.py, db.replace_alerts).
+create table if not exists alerts (
+  id text primary key,                -- "<source>:<upstream id>"
+  source text not null check (source in ('met_office', 'uk_emergency_alerts')),
+  level text not null check (level in ('yellow', 'amber', 'red')),
+  hazard text not null,
+  headline text not null,
+  area_text text not null,
+  url text not null,
+  starts_at text not null,
+  ends_at text,                       -- null = in force until the feed says it stopped
+  fetched_at text not null,
+  raw text not null                   -- JSON: the upstream item(s)
+);
+create index if not exists alerts_source_idx on alerts (source);
+
+-- Poll state of the alert feeds, one row per source. They are not rows of
+-- `sources` because they produce no events and have no agent runs.
+create table if not exists alert_polls (
+  source text primary key,
+  last_attempt_at text,
+  last_success_at text,
+  last_error text
+);
