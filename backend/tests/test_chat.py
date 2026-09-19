@@ -70,8 +70,8 @@ def test_area_question_uses_tools_and_returns_sources():
     assert out["sources"] == [{"title": "Assault on Brixton Road", "url": "https://news.met.police.uk/x"}]
     assert out["tool_calls"] == ["find_place('Brixton')", "area_report(51.4627, -0.1145, 500)"]
     # events are trimmed to the fields the model needs; the long summary and geometry are dropped
-    assert set(seen["area"]["events"][0]) == {"title", "category", "risk", "severity", "occurred_at", "source_ids",
-                                              "distance_m", "urls"}
+    assert set(seen["area"]["events"][0]) == {"id", "title", "category", "subtype", "state", "risk", "severity",
+                                              "occurred_at", "source_ids", "distance_m", "urls"}
 
 
 def test_route_tool_drops_geometry_and_api_errors_reach_the_model():
