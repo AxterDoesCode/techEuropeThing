@@ -106,7 +106,7 @@ MIN_DENSITY_RATIO = 0.25
 # crime was reported or the suspect was held. Records at the other venue labels
 # (supermarket, shopping area, ...) are offences in a public place: their points
 # are dropped, but their share of the LSOA total stays on the LSOA's streets.
-RECORDING_VENUES = ("hospital", "police station", "prison")
+RECORDING_VENUES = frozenset({"hospital", "police station", "prison"})
 SHRINK_K = 1.0
 FILL_RES = 10
 
@@ -138,6 +138,13 @@ class Baseline:
     points: list[CrimePoint]
     median_street_density: float | None  # km per km2; None without a graph
     stats: dict[str, Any]
+
+    def cells(self, res: int) -> dict[str, float]:
+        """H3 baseline in [0, 1], summed from the same street-point rows that
+        routing.edge_baseline reads, so the cell layer and the routes agree. The
+        rows of an LSOA already sum to its value, and an LSOA without street
+        points is filled on a grid finer than the cells, so no area is skipped."""
+        return police_uk.baseline_cells(self.points, months=1, res=res)
 
     def payload(self) -> dict[str, Any]:
         return police_uk.points_payload(self.points, self.month, {
@@ -377,7 +384,7 @@ def subtract_recording_venues(lsoas: dict[str, Lsoa], crimes: list[dict[str, Any
     )
     total = np.bincount(at[at >= 0], minlength=len(ordered))
     is_recording = np.array(
-        [any(v in c["location"]["street"]["name"].lower() for v in RECORDING_VENUES) for c in records], dtype=bool
+        [police_uk.venue_label(c["location"]["street"]["name"]) in RECORDING_VENUES for c in records], dtype=bool
     )
     venue = np.bincount(at[(at >= 0) & is_recording], minlength=len(ordered))
     removed = 0.0

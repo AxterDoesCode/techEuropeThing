@@ -42,8 +42,10 @@ RELEVANT_CATEGORIES = frozenset({
 # police.uk snaps a record to the nearest point of a fixed list, and part of that
 # list is venues where crimes are recorded rather than committed (a hospital, a
 # custody suite) or that are not the street. A point is dropped when its street
-# label contains one of these strings (case-insensitive).
-VENUE_LABELS = (
+# label, without "On or near " and in lower case, is one of these, or contains
+# "airport". The label is compared whole because streets are named after venues
+# ("On or near Hospital Road", "On or near Police Station Lane").
+VENUE_LABELS = frozenset({
     "hospital",
     "police station",
     "prison",
@@ -51,8 +53,7 @@ VENUE_LABELS = (
     "shopping area",
     "petrol station",
     "further/higher educational building",
-    "airport",
-)
+})
 
 Bbox = tuple[float, float, float, float]  # west, south, east, north
 
@@ -119,9 +120,16 @@ def fetch_month(month: str | None = None, bbox: Bbox = LONDON_BBOX) -> tuple[str
     return month, list(unique.values())
 
 
+def venue_label(street: str) -> str | None:
+    """The venue a street label names ("hospital", "airport", ...), or None."""
+    label = street.lower().removeprefix("on or near ").strip()
+    if label in VENUE_LABELS:
+        return label
+    return "airport" if "airport" in label else None
+
+
 def is_venue(street: str) -> bool:
-    label = street.lower()
-    return any(v in label for v in VENUE_LABELS)
+    return venue_label(street) is not None
 
 
 def aggregate_points(crimes: list[dict[str, Any]]) -> list[CrimePoint]:
