@@ -7,6 +7,8 @@ import { EventFeed } from './panels/EventFeed'
 import { CoordinatePanel, type CoordinateFields } from './panels/CoordinatePanel'
 import { AgentPanel } from './panels/AgentPanel'
 import { LayerPanel } from './panels/LayerPanel'
+import { RoutePanel } from './panels/RoutePanel'
+import { useRouteState } from './route'
 import { formatCoord } from './format'
 import { useTheme } from './theme'
 import type { EventFeature, LngLat } from './types'
@@ -29,6 +31,7 @@ export default function App() {
   const [hover, setHover] = useState<LngLat | null>(null)
   const [fields, setFields] = useState<CoordinateFields>({ lng: '', lat: '' })
   const [theme, toggleTheme] = useTheme()
+  const routing = useRouteState()
 
   const features = events.events
   const crimeRows = useMemo(() => (showCrime ? (crime.data?.rows ?? []) : []), [showCrime, crime.data])
@@ -42,6 +45,18 @@ export default function App() {
     (pos: LngLat) => setFields({ lng: formatCoord(pos.lng), lat: formatCoord(pos.lat) }),
     [],
   )
+  // While a route endpoint is being picked, the click sets it instead of the Position fields
+  const pickRoutePoint = routing.pick
+  const onMapClick = useCallback(
+    (pos: LngLat) => {
+      if (!pickRoutePoint(pos)) copyToFields(pos)
+    },
+    [pickRoutePoint, copyToFields],
+  )
+  const routeEndpoints = useMemo(
+    () => ({ origin: routing.origin, destination: routing.destination }),
+    [routing.origin, routing.destination],
+  )
   const goTo = useCallback((pos: LngLat) => setTarget({ ...pos, nonce: Date.now() }), [])
 
   return (
@@ -53,8 +68,11 @@ export default function App() {
         target={target}
         onSelect={setSelectedId}
         onHover={setHover}
-        onMapClick={copyToFields}
+        onMapClick={onMapClick}
         theme={theme}
+        route={routing.route}
+        routeEndpoints={routeEndpoints}
+        picking={routing.picking !== null}
       />
       <header className="panel header">
         <h1>London Live Risk Map</h1>
@@ -69,6 +87,16 @@ export default function App() {
       <aside className="left">
         <CoordinatePanel hover={hover} fields={fields} onChange={setFields} onGo={goTo} />
         <LayerPanel crime={crime.data} showCrime={showCrime} onToggleCrime={setShowCrime} />
+        <RoutePanel
+          fields={routing.fields}
+          origin={routing.origin}
+          destination={routing.destination}
+          picking={routing.picking}
+          route={routing.route}
+          onChange={routing.setFields}
+          onPick={routing.setPicking}
+          onRoute={routing.setRoute}
+        />
         <EventFeed events={features} newIds={events.newIds} selectedId={selectedId} onSelect={selectFromFeed} />
         <AgentPanel agents={agents.data ?? []} />
       </aside>

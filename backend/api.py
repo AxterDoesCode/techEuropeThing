@@ -10,6 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from . import db
 from .api_inject import router as inject_router
+from .api_route import router as route_router
 from .api_stream import router as stream_router
 from .features import event_feature
 from .models import Category, CellScore, utcnow
@@ -19,6 +20,7 @@ web = FastAPI(title="London Live Risk Map API")
 web.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 web.add_middleware(GZipMiddleware, minimum_size=10_000)
 web.include_router(inject_router)
+web.include_router(route_router)
 web.include_router(stream_router)
 
 
