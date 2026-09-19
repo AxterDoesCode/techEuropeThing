@@ -299,7 +299,7 @@ export function RiskMap({
     mapRef,
     crimeAt && showCrime ? `${crimeAt.lng},${crimeAt.lat}` : null,
     crimeAt,
-    6,
+    crimePopupOffset,
     () => handlers.current.onCrimeQuery(null),
   )
   // Area covered by the open crime summary: a circle of CRIME_QUERY_RADIUS_M on the
@@ -465,11 +465,21 @@ function fitPadding(map: maplibregl.Map, sidebarOpen: boolean) {
 
 // MapLibre popup whose content is rendered by React through a portal into the
 // returned node. The popup exists while `key` is not null and is rebuilt when it changes.
+// The crime popup is placed outside the query circle so it does not cover it:
+// the offset is the circle's radius on screen at the current zoom, plus a gap.
+// 78271.517 m per pixel at zoom 0 on the equator with 512 px tiles.
+function crimePopupOffset(map: maplibregl.Map, at: LngLat): number {
+  const metersPerPixel = (78271.517 * Math.cos((at.lat * Math.PI) / 180)) / 2 ** map.getZoom()
+  return Math.min(320, CRIME_QUERY_RADIUS_M / metersPerPixel) + 8
+}
+
+type PopupOffset = number | ((map: maplibregl.Map, at: LngLat) => number)
+
 function usePopup(
   mapRef: RefObject<maplibregl.Map | null>,
   key: string | null,
   at: LngLat | null,
-  offset: number,
+  offset: PopupOffset,
   onUserClose: () => void,
 ): HTMLDivElement | null {
   const [node, setNode] = useState<HTMLDivElement | null>(null)
@@ -483,7 +493,8 @@ function usePopup(
     if (!map || key === null || !pos) return
     const content = document.createElement('div')
     // closeOnClick is off: the click that opens a popup would also close it
-    const popup = new maplibregl.Popup({ offset, maxWidth: '360px', closeOnClick: false, className: 'event-popup' })
+    const offsetNow = () => (typeof offset === 'function' ? offset(map, pos) : offset)
+    const popup = new maplibregl.Popup({ offset: offsetNow(), maxWidth: '360px', closeOnClick: false, className: 'event-popup' })
       .setLngLat([pos.lng, pos.lat])
       .setDOMContent(content)
       .addTo(map)
@@ -497,9 +508,13 @@ function usePopup(
     // again when the size changes; otherwise a tall popup extends past the window edge.
     const resize = new ResizeObserver(() => popup.setLngLat(popup.getLngLat()))
     resize.observe(content)
+    // An offset that depends on the zoom is recomputed while zooming
+    const onZoom = () => popup.setOffset(offsetNow())
+    if (typeof offset === 'function') map.on('zoom', onZoom)
     setNode(content)
     return () => {
       disposed = true
+      map.off('zoom', onZoom)
       resize.disconnect()
       popup.remove()
       setNode(null)
