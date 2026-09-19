@@ -76,12 +76,6 @@ Follow-up reporting: before returning an incident, call `find_similar_events` wi
 category, place_id and time. If one of the returned events is the same incident, set \
 `existing_event_id` to its event_id. Otherwise leave it null.
 
-Social media posts (Item type: social): the text shown is the whole post, so do not call \
-`fetch_article`. Include an incident only when the author reports something they saw or \
-that is happening now at a named place (for example a cordon, a fight, a fire, an \
-evacuation). Reject questions, requests for advice, recommendations, jokes, complaints, \
-hearsay without a place ("has anyone heard about..."), and discussion of news or of past events.
-
 You may make at most 8 tool calls per article.
 
 Fields:
@@ -307,7 +301,6 @@ def article_prompt(article: Article) -> str:
     published = article.published_at.isoformat() if article.published_at else "unknown"
     return (
         f"Source: {article.source_id}\n"
-        f"Item type: {article.kind}\n"
         f"Published: {published}\n"
         f"URL: {article.url or 'none'}\n"
         f"Headline: {article.title}\n"

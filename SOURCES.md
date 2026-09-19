@@ -13,7 +13,6 @@ All endpoints are public and need no key. `TFL_APP_KEY` is optional and raises t
 | BBC London news | `bbc_london` | `https://feeds.bbci.co.uk/news/england/london/rss.xml` | General London news (RSS, unstructured). Polled only when an LLM is configured (`LLM_MODEL`): the rule-based extractor gave mostly false positives on this feed |
 | Evening Standard London | `standard_london` | `https://www.standard.co.uk/news/london/rss` | London news (RSS, unstructured). Polled only when an LLM is configured |
 | MyLondon | `mylondon` | `https://www.mylondon.news/news/?service=rss` | London local news (RSS, unstructured). Polled only when an LLM is configured |
-| X (Twitter) | `x_london` | Scraped with `twscrape` through the X website's internal search API, using the session cookies of a throwaway account (`X_AUTH_TOKEN`, `X_CT0` in the secret). No free official read API exists. Outside X's terms; the account can be locked and the library breaks when X changes its API | Public posts matching incident terms in London (two searches, newest 25 posts per poll, `since_id` cursor). Unstructured, `social` confidence (0.35), LLM only, every 5 min. Inactive until the cookies are set. Check cookies with `python -m backend.tools.check_x` |
 | Met Police recorded crime | `police_uk` (one-off backfill) | `https://data.police.uk/api/crimes-street/all-crime?poly=&date=` (months: `https://data.police.uk/api/crimes-street-dates`) | Monthly street-level crime records; baseline layer and heatmap |
 
 ## Geocoding (used by unstructured sources)
@@ -30,6 +29,7 @@ Unstructured sources go through `backend/extraction.py`: a headline pre-filter, 
 | Source | Endpoint | Note |
 | :--- | :--- | :--- |
 | Reddit (r/london and borough subreddits) | Reddit API (OAuth app needed) | Unstructured, `social` confidence; needs the extraction agent |
+| Twitter/X | Paid API | Only if access is available; unstructured, `social` confidence |
 
 ## Removed
 

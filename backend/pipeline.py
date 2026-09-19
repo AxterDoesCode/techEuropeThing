@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import os
 import traceback
 from datetime import datetime
 from typing import Any, Callable, Iterable, Protocol
@@ -15,7 +14,6 @@ from .sources.ea_floods import EaFloodsSource
 from .sources.met_news import MetNewsSource
 from .sources.rss import BbcLondonSource, EveningStandardSource, MyLondonSource
 from .sources.tfl_road import TflRoadSource
-from .sources.x_posts import XSource
 from .sources.tfl_transit import TflTransitSource
 
 SOURCES: dict[str, StructuredSource] = {
@@ -28,18 +26,14 @@ SOURCES: dict[str, StructuredSource] = {
         BbcLondonSource(),
         EveningStandardSource(),
         MyLondonSource(),
-        XSource(),
     ]
 }
 
 
 def is_pollable(source_id: str) -> bool:
-    """False for unknown sources, for sources that need an LLM when none is configured,
-    and for sources whose credentials (`requires_env`) are not set."""
+    """False for unknown sources and for sources that need an LLM when none is configured."""
     source = SOURCES.get(source_id)
     if source is None:
-        return False
-    if not all(os.environ.get(name) for name in getattr(source, "requires_env", ())):
         return False
     return llm.is_configured() or not getattr(source, "requires_llm", False)
 
