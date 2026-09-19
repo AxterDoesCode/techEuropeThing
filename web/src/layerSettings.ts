@@ -10,6 +10,7 @@ export interface LayerSettings {
   disabledSources: string[]
   layersCollapsed: boolean
   sidebarCollapsed: boolean
+  chatCollapsed: boolean
 }
 
 export const MIN_RISK_MAX = 0.5
@@ -21,9 +22,15 @@ export const DEFAULT_LAYER_SETTINGS: LayerSettings = {
   disabledSources: [],
   layersCollapsed: false,
   sidebarCollapsed: false,
+  chatCollapsed: false,
 }
 
 const STORAGE_KEY = 'layerSettings'
+
+// Below this window width the sidebar and the chat panel do not fit next to each
+// other with a usable map between them: only one of them is open at a time
+export const NARROW_WINDOW_PX = 1100
+export const isNarrowWindow = () => window.innerWidth < NARROW_WINDOW_PX
 
 const inRange = (v: unknown, min: number, max: number): v is number =>
   typeof v === 'number' && Number.isFinite(v) && v >= min && v <= max
@@ -44,6 +51,8 @@ function validate(raw: unknown): LayerSettings {
         : d.disabledSources,
     layersCollapsed: bool(r.layersCollapsed, d.layersCollapsed),
     sidebarCollapsed: bool(r.sidebarCollapsed, d.sidebarCollapsed),
+    // stored settings from before the chat panel have no value: open on a wide window
+    chatCollapsed: bool(r.chatCollapsed, isNarrowWindow()) || (isNarrowWindow() && !bool(r.sidebarCollapsed, d.sidebarCollapsed)),
   }
 }
 
@@ -58,7 +67,7 @@ function load(): LayerSettings {
   } catch {
     // storage unavailable or not JSON: defaults
   }
-  return { ...DEFAULT_LAYER_SETTINGS, layersCollapsed: window.innerHeight < SHORT_WINDOW_PX }
+  return { ...DEFAULT_LAYER_SETTINGS, layersCollapsed: window.innerHeight < SHORT_WINDOW_PX, chatCollapsed: isNarrowWindow() }
 }
 
 export type UpdateLayerSettings = (patch: Partial<LayerSettings>) => void

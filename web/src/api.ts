@@ -4,6 +4,11 @@ import type { AgentStatus, CrimePoints, EventCollection, LngLat, OfficialAlert, 
 // `python -m backend.tools.export_sample web/public/sample`.
 export const API_BASE = import.meta.env.VITE_API_BASE as string | undefined
 
+// Base URL of POST /api/chat (docs/API.md). Undefined in sample mode: there is no chat backend.
+const DEFAULT_CHAT_BASE = 'https://alexchau256--london-risk-chat.modal.run'
+export const CHAT_BASE: string | undefined =
+  (import.meta.env.VITE_CHAT_BASE as string | undefined) || (API_BASE ? DEFAULT_CHAT_BASE : undefined)
+
 async function getJson<T>(url: string): Promise<T> {
   const resp = await fetch(url)
   if (!resp.ok) throw new Error(`${resp.status} ${resp.statusText}: ${url}`)
