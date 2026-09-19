@@ -273,3 +273,54 @@ def test_event_refs_backfilled_on_old_database(tmp_path):
 def test_mergeable_flag_is_not_serialised():
     assert met().mergeable and "mergeable" not in met().model_dump()
     assert tfl().mergeable is False
+
+
+def test_reextracted_report_with_corrected_time_merges_into_the_other_event(tmp_path):
+    """A report first stored with its publication time, then re-extracted with the
+    real incident time, joins the event that other sources already describe."""
+    from datetime import datetime, timedelta, timezone
+
+    from backend import db
+    from backend.db import SqliteRepo
+    from backend.models import Category, Event
+
+    db.connect(tmp_path / "risk.sqlite")
+    repo = SqliteRepo()
+    incident = datetime(2026, 9, 16, 22, 20, tzinfo=timezone.utc)
+    published = incident + timedelta(hours=42)
+
+    def report(source: str, occurred_at: datetime, confidence: float) -> Event:
+        return Event(
+            external_ref=f"{source}:guid",
+            category=Category.VIOLENT_CRIME,
+            title="Fatal stabbing on Lloyd Baker Street",
+            geometry={"type": "Point", "coordinates": [-0.1112, 51.5286]},
+            lng=-0.1112,
+            lat=51.5286,
+            radius_m=250,
+            severity=0.95,
+            confidence=confidence,
+            source_confidence={source: confidence},
+            half_life_min=1440,
+            occurred_at=occurred_at,
+            source_ids=[source],
+            urls=[f"https://example.org/{source}"],
+            mergeable=True,
+        )
+
+    assert repo.upsert_events([report("met_news", published, 0.9)]) == {"inserted": 1, "merged": 0}
+    assert repo.upsert_events([report("bbc_london", incident, 0.7)]) == {"inserted": 1, "merged": 0}
+
+    # the Met report is extracted again, now with the real incident time
+    assert repo.upsert_events([report("met_news", incident, 0.9)]) == {"inserted": 0, "merged": 1}
+    events = db.events_geojson(datetime(2026, 9, 19, tzinfo=timezone.utc))
+    assert len(events) == 1
+    assert sorted(events[0].source_ids) == ["bbc_london", "met_news"]
+    assert events[0].confidence == pytest.approx(1 - 0.1 * 0.3)
+
+    # polling either source again changes nothing
+    assert repo.upsert_events([report("met_news", incident, 0.9), report("bbc_london", incident, 0.7)]) == {
+        "inserted": 0,
+        "merged": 0,
+    }
+    assert len(db.events_geojson(datetime(2026, 9, 19, tzinfo=timezone.utc))) == 1

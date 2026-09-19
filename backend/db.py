@@ -127,7 +127,7 @@ def _event_params(ev: Event, now: str) -> dict[str, Any]:
 
 
 # Columns whose change makes an upsert write (and bump updated_at)
-_COMPARED = ("category", "title", "summary", "geometry", "lng", "lat", "radius_m", "severity", "expires_at")
+_COMPARED = ("category", "title", "summary", "geometry", "lng", "lat", "radius_m", "severity", "expires_at", "occurred_at")
 
 
 def _event_by_ref(conn: sqlite3.Connection, ref: str | None) -> Event | None:
@@ -196,8 +196,9 @@ def _merge_candidates(
     return [ev for _, ev in found]
 
 
-def _merge_target(conn: sqlite3.Connection, ev: Event) -> Event | None:
-    """The existing row that `ev` should be folded into, or None."""
+def _merge_target(conn: sqlite3.Connection, ev: Event, exclude_id: str | None = None) -> Event | None:
+    """The existing row that `ev` should be folded into, or None. `exclude_id`
+    is the row that currently holds `ev` itself."""
     # merge_into is set by the extraction agent when it has identified the event
     # a report refers to. The distance and time tests are skipped for it.
     merge_into = getattr(ev, "merge_into", None)
@@ -205,14 +206,14 @@ def _merge_target(conn: sqlite3.Connection, ev: Event) -> Event | None:
         row = conn.execute("select * from events where id = ?", [str(merge_into)]).fetchone()
         if row is not None:
             target = _event_from_row(row)
-            if target.group == ev.group:
+            if target.group == ev.group and str(target.id) != exclude_id:
                 return target
     if not ev.mergeable:
         return None
     candidates = [
         c
         for c in _merge_candidates(conn, ev.category, ev.lng, ev.lat, ev.occurred_at, ev.radius_m)
-        if should_merge(c, ev)
+        if should_merge(c, ev) and str(c.id) != exclude_id
     ]
     if not candidates:
         return None
@@ -346,7 +347,18 @@ class SqliteRepo:
                     if updated != existing:
                         _write_merged(conn, updated, now)
                     continue
-                target = _merge_target(conn, ev) if existing is None else None
+                target = None
+                if existing is None:
+                    target = _merge_target(conn, ev)
+                elif ev.mergeable:
+                    # A re-extracted report (edited article, or a better extractor)
+                    # can now match another event, typically because its incident
+                    # time changed. Its own single-source row is then removed and
+                    # the report is folded into that event.
+                    target = _merge_target(conn, ev, exclude_id=str(existing.id))
+                    if target is not None:
+                        conn.execute("delete from event_refs where event_id = ?", [str(existing.id)])
+                        conn.execute("delete from events where id = ?", [str(existing.id)])
                 if target is not None:
                     _write_merged(conn, _merge_keeping_feed_end(target, ev), now)
                     _map_ref(conn, ev.external_ref, str(target.id))
@@ -383,7 +395,8 @@ class SqliteRepo:
                         update events set category = :category, title = :title, summary = :summary,
                           geometry = :geometry, lng = :lng, lat = :lat, radius_m = :radius_m,
                           h3_r10 = :h3_r10, h3_r9 = :h3_r9, h3_r7 = :h3_r7, severity = :severity,
-                          expires_at = :expires_at, ended_at = null, updated_at = :now
+                          expires_at = :expires_at, occurred_at = :occurred_at,
+                          ended_at = null, updated_at = :now
                         where id = :id
                         """,
                         params,
