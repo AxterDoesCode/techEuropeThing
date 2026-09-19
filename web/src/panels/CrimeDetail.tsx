@@ -1,9 +1,8 @@
-import { CRIME_QUERY_RADIUS_M, crimeCategoryLabel, monthLabel, type CrimeSummary } from '../map/crimeIndex'
+import { CRIME_QUERY_RADIUS_M, crimeCategoryLabel, type CrimeSummary } from '../map/crimeIndex'
 import { formatCoord } from '../format'
 import type { LngLat } from '../types'
 
 interface Props {
-  month: string
   pos: LngLat
   summary: CrimeSummary
 }
@@ -17,16 +16,16 @@ function comparison(summary: CrimeSummary): string | null {
 
 // Popup content for a click on the crime layer: recorded crime within
 // CRIME_QUERY_RADIUS_M of the clicked position
-export function CrimeDetail({ month, pos, summary }: Props) {
+export function CrimeDetail({ pos, summary }: Props) {
   const compared = comparison(summary)
   return (
     <div className="detail crime-detail">
       <h3>Recorded street crime within {CRIME_QUERY_RADIUS_M} m</h3>
       <p className="meta">
-        {monthLabel(month)} · {formatCoord(pos.lng)}, {formatCoord(pos.lat)}
+        {formatCoord(pos.lng)}, {formatCoord(pos.lat)}
       </p>
       {summary.total === 0 ? (
-        <p className="summary">No recorded street crimes within {CRIME_QUERY_RADIUS_M} m of this position in {monthLabel(month)}.</p>
+        <p className="summary">No recorded street crimes within {CRIME_QUERY_RADIUS_M} m of this position.</p>
       ) : (
         <>
           <p className="total">
