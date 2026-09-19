@@ -616,6 +616,12 @@ def agent_status() -> list[dict[str, Any]]:
     return [dict(r) | {"enabled": bool(r["enabled"])} for r in rows]
 
 
+def latest_crime_month() -> str | None:
+    with _tx() as conn:
+        row = conn.execute("select max(month) as month from crime_points").fetchone()
+    return row["month"] if row else None
+
+
 def latest_crime_points_json() -> str | None:
     """The stored JSON text, returned without parsing (about 3 MB)."""
     with _tx() as conn:

@@ -16,6 +16,7 @@ container is killed, and those writes are re-created by the next polls.
 from __future__ import annotations
 
 import os
+from pathlib import Path
 from typing import Any
 
 import modal
@@ -26,10 +27,18 @@ image = (
     .add_local_python_source("backend")
     .add_local_dir("backend/sql", "/root/backend/sql")
 )
+# The built web client (`npm run build` in web/) is served by the Store container
+# at "/", next to the API. Without a build the API is deployed alone.
+WEB_DIST_LOCAL = Path(__file__).parent.parent / "web" / "dist"
+WEB_DIST_REMOTE = "/root/web_dist"
+if WEB_DIST_LOCAL.is_dir():
+    image = image.add_local_dir(str(WEB_DIST_LOCAL), WEB_DIST_REMOTE)
 
 APP_NAME = "london-risk"
 app = modal.App(APP_NAME, image=image)
 volume = modal.Volume.from_name("london-risk-db", create_if_missing=True)
+# Walking graph for /api/route, written by build_graph and read by the Store
+graph_volume = modal.Volume.from_name("london-risk-graph", create_if_missing=True)
 # Optional Modal secret `london-risk` (TFL_APP_KEY, LLM_MODEL and the provider key).
 # Deploy with LONDON_RISK_SECRET=1 once it exists; without it no secret is attached.
 secrets = [modal.Secret.from_name("london-risk")] if os.environ.get("LONDON_RISK_SECRET") else []
@@ -37,10 +46,19 @@ secrets = [modal.Secret.from_name("london-risk")] if os.environ.get("LONDON_RISK
 VOLUME_DIR = "/data"
 SNAPSHOT_PATH = f"{VOLUME_DIR}/risk.sqlite"
 LOCAL_PATH = "/tmp/risk.sqlite"
+GRAPH_DIR = "/graph"
+GRAPH_PATH = f"{GRAPH_DIR}/walk.npz"
 SNAPSHOT_INTERVAL_S = 30
 
 
-@app.cls(volumes={VOLUME_DIR: volume}, max_containers=1, min_containers=1, timeout=3600, secrets=secrets)
+@app.cls(
+    volumes={VOLUME_DIR: volume, GRAPH_DIR: graph_volume},
+    max_containers=1,
+    min_containers=1,
+    timeout=3600,
+    memory=2048,
+    secrets=secrets,
+)
 @modal.concurrent(max_inputs=100)
 class Store:
     @modal.enter()
@@ -51,6 +69,7 @@ class Store:
 
         from . import db
 
+        os.environ["GRAPH_PATH"] = GRAPH_PATH
         if Path(SNAPSHOT_PATH).exists():
             shutil.copy(SNAPSHOT_PATH, LOCAL_PATH)
         db.connect(LOCAL_PATH)
@@ -94,8 +113,13 @@ class Store:
 
     @modal.asgi_app()
     def api(self):
+        from fastapi.staticfiles import StaticFiles
+
         from .api import web
 
+        # Mounted after the API routes, so "/api/..." is matched first
+        if Path(WEB_DIST_REMOTE).is_dir():
+            web.mount("/", StaticFiles(directory=WEB_DIST_REMOTE, html=True), name="web")
         return web
 
 
@@ -153,3 +177,20 @@ def backfill_police(month: str = "") -> dict[str, int]:
     counts = {"crimes": len(crimes), "points": len(points)}
     print(resolved, counts)
     return counts
+
+
+@app.function(volumes={GRAPH_DIR: graph_volume}, timeout=3600, memory=8192)
+def build_graph(bbox: str = "") -> dict[str, Any]:
+    """Build the walking graph from OpenStreetMap into the graph Volume. Redeploy
+    afterwards so the Store container loads the new file.
+
+    bbox is "west,south,east,north"; empty = inner London."""
+    from pathlib import Path
+
+    from .tools import build_graph as tool
+
+    box = tuple(float(v) for v in bbox.split(",")) if bbox else tool.INNER_LONDON
+    stats = tool.build(box, Path(GRAPH_PATH), 1800, None)
+    graph_volume.commit()
+    print(stats)
+    return stats

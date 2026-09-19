@@ -26,6 +26,8 @@ modal run -m backend.app::poll_source --source-id tfl_road # one poll by hand
 
 Deployed 2026-09-19: API at `https://alexchau256--london-risk-store-api.modal.run`. Storage calls from any app, including the temporary app that `modal run` starts, go to the deployed `Store` by name, so `backfill_police` and manual polls require the app to be deployed first. `modal app stop london-risk` stops all compute; the database snapshot stays in the Volume and is restored on the next deploy.
 
+Walking routes need the street graph. On Modal: `modal run -m backend.app::build_graph` (writes to the Volume `london-risk-graph`), then redeploy so the `Store` loads it. Locally: `python -m backend.tools.build_graph` writes `data/graph/walk.npz` (needs a reachable Overpass server; pass `--overpass-url` for a mirror).
+
 Optional secret for a TfL key and, later, the LLM: `modal secret create london-risk TFL_APP_KEY=...`, then deploy with `LONDON_RISK_SECRET=1`.
 
 ## Web

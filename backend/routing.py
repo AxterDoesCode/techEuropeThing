@@ -33,6 +33,13 @@ DEFAULT_ALPHA = 4.0
 DEFAULT_BETA = 0.15
 WALK_SPEED_M_S = 1.35
 MAX_SNAP_M = 300.0
+# Street-level crime baseline: recorded crime points within this distance of a
+# street segment's midpoint count towards it, weighted 1 at 0 m down to 0 here.
+BASELINE_RADIUS_M = 120.0
+# Log-scaled and clipped at this percentile of segments, like the cell baseline
+BASELINE_CLIP_PERCENTILE = 99.5
+# Same weight the cell scores give the baseline (scoring.BASELINE_WEIGHT)
+BASELINE_WEIGHT = 0.4
 SAMPLE_STEP_M = 50.0
 
 # Same equirectangular projection as scoring.py
@@ -200,6 +207,42 @@ def edge_risk(graph: Graph, cell_scores: dict[str, float]) -> np.ndarray:
     return np.concatenate([undirected, undirected])
 
 
+def edge_baseline(graph: Graph, crime_rows: Iterable[Sequence[Any]]) -> np.ndarray:
+    """Per directed edge: recorded-crime density near the street segment, in [0, 1].
+
+    `crime_rows` are the police.uk street points ([lng, lat, count, weighted, ...]).
+    The H3 res-9 cells used for the map are about 350 m across, so parallel
+    streets share one value and a route cannot avoid anything by moving one
+    street over. police.uk snaps crimes to individual street points, which
+    gives a per-street value."""
+    m = graph.n_undirected
+    rows = [(r[0], r[1], r[3]) for r in crime_rows]
+    if not rows:
+        return np.zeros(2 * m, dtype=np.float32)
+    data = np.asarray(rows, dtype=np.float64)
+    tree = cKDTree(_xy(data[:, 0], data[:, 1]))
+    weights = data[:, 2]
+
+    mid = (graph.geom_offsets[:-1] + graph.geom_offsets[1:] - 1) // 2
+    mids = _xy(graph.geom_coords[mid, 0], graph.geom_coords[mid, 1])
+    density = np.zeros(m, dtype=np.float64)
+    for i, near in enumerate(tree.query_ball_point(mids, BASELINE_RADIUS_M)):
+        if near:
+            d = np.linalg.norm(tree.data[near] - mids[i], axis=1)
+            density[i] = float(np.sum(weights[near] * (1.0 - d / BASELINE_RADIUS_M)))
+
+    cap = math.log1p(float(np.percentile(density, BASELINE_CLIP_PERCENTILE))) or 1.0
+    undirected = np.minimum(1.0, np.log1p(density) / cap).astype(np.float32)
+    return np.concatenate([undirected, undirected])
+
+
+def combined_risk(live: np.ndarray, baseline: np.ndarray | None) -> np.ndarray:
+    """1 - (1 - live) * (1 - k * baseline), the formula the cell scores use."""
+    if baseline is None:
+        return live
+    return 1.0 - (1.0 - live) * (1.0 - BASELINE_WEIGHT * baseline)
+
+
 def edge_costs(graph: Graph, risk: np.ndarray, alpha: float, beta: float) -> np.ndarray:
     if alpha < 0 or not 0 <= beta < 1:
         raise ValueError("alpha must be >= 0 and beta in [0, 1)")
@@ -273,8 +316,11 @@ def route(
     cell_scores: dict[str, float],
     alpha: float = DEFAULT_ALPHA,
     beta: float = DEFAULT_BETA,
+    baseline: np.ndarray | None = None,
 ) -> dict[str, Any]:
-    """`fast` minimises length; `safe` minimises length * (1 + alpha * risk) *
+    """`cell_scores` are per-cell risk values; with a street-level `baseline`
+    (edge_baseline) pass the cells' live component only, and the two are combined
+    per edge. `fast` minimises length; `safe` minimises length * (1 + alpha * risk) *
     (1 - beta * lit). With alpha == 0 the lit term is not applied either, so both
     routes are the same path."""
     source = snap(graph, origin, "origin")
@@ -282,7 +328,7 @@ def route(
     if source == target:
         raise RouteError("origin and destination are at the same street node")
 
-    risk = edge_risk(graph, cell_scores)
+    risk = combined_risk(edge_risk(graph, cell_scores), baseline)
     fast_edges = _shortest_path(graph, edge_costs(graph, risk, 0.0, 0.0), source, target)
     if alpha > 0:
         safe_costs = edge_costs(graph, risk, alpha, beta)

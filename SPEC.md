@@ -219,18 +219,27 @@ Each message is `event: <type>`, `id: <mark>`, `data: <one line of JSON>`. The m
 - Live updates (`web/src/useLiveEvents.ts`): initial load from `/api/events`, then an `EventSource` on `/api/stream` applies `event_upsert` / `event_end` to the list and reloads `/api/agents` on `agent_run`. When the stream has been down for more than 10 s the client polls `/api/events` every 15 s until the stream is open again, and reloads once after a long interruption. Ended events are removed from the list in both modes. The header shows `live` or `polling`; events that arrived after the initial load are marked in the feed for 60 s. Without `VITE_API_BASE` (static sample files) no stream is opened.
 - Not built yet: time slider, category filters.
 
-## 10. Phase 2: routing
+## 10. Routing
 
-- Graph: OSMnx `network_type="walk"` for inner London (roughly zones 1–2: bbox `-0.26, 51.45, 0.02, 51.57`), built once offline, stored in a Modal Volume as a pickled/GraphML file, loaded at container start. Each edge is precomputed with the list of res-9 H3 cells it passes through and `lit` from OSM tags.
-- Edge cost, strictly positive so Dijkstra/A* remain valid:
+Two walking routes are computed server-side per request: `fast` (shortest) and `safe` (risk-weighted). Both use the current `cell_scores`, so routes change as events arrive.
+
+- Graph build (`backend/tools/build_graph.py`, offline): osmnx `network_type="walk"` for inner London (`-0.26, 51.45, 0.02, 51.57`), largest connected component. osmnx and networkx are used only here.
+- Graph file: one compact `.npz` (format documented at the top of `backend/routing.py`): node coordinates, directed edge arrays, edge length, `lit` flag from the OSM tag, the res-9 H3 cells each edge passes through (sampled every ~50 m, CSR layout), and edge polylines so routes follow street shapes. Query time needs only numpy and scipy.
+- Engine (`backend/routing.py`): endpoints are snapped to the nearest node with a KD-tree (rejected beyond 300 m). Shortest paths use `scipy.sparse.csgraph.dijkstra`.
+- Edge risk = `1 - (1 - live) * (1 - 0.4 * baseline)`, the cell score formula, but with a per-street baseline. `live` is the maximum live component of the res-9 cells the edge passes through. `baseline` (`edge_baseline`) is the recorded-crime density around the segment: police.uk street points within 120 m of the segment midpoint, weighted 1 at 0 m down to 0 at 120 m, log-scaled and clipped at the 99.5th percentile of segments. It is computed once per graph and crime month (about 2 s) and cached.
+- Why not the cell scores alone: a res-9 cell is about 350 m across, so parallel streets share one value and a detour has to move a whole cell sideways. Measured on three central London routes at alpha 4: cell-based risk gave 0–2% risk reduction; the per-street baseline gives 16–36% for 4–16% extra distance.
+- Measured (inner London graph: 154,181 nodes, 200,285 segments, 7.9 MB file, lit tag present on 41% of segments): load 0.14 s, about 50 MB of memory, about 200 ms per request including the cell query.
+- Edge cost is a product of positive factors, so it is always above zero and Dijkstra stays valid:
 
 ```
 cost(e) = length(e) * (1 + alpha * risk(e)) * (1 - beta * lit(e))
-risk(e) = max score of the cells e passes through
-alpha in [0, 10] (user slider), beta = 0.15, lit(e) in {0, 1}
+alpha in [0, 10] (client slider, default 4), beta = 0.15, lit(e) in {0, 1}
+fast = alpha 0, beta 0
 ```
 
-- `fast` = alpha 0, beta 0. `safe` = user alpha. Return both with real computed metrics. Cell scores are read from `cell_scores` per request (one query for the route bbox), so routes change as events arrive.
+- `POST /api/route` (`backend/api_route.py`): body `{origin:[lng,lat], destination:[lng,lat], alpha?}`. Returns for `fast` and `safe`: GeoJSON LineString, `length_m`, `duration_min` (1.35 m/s), length-weighted `mean_risk`, `max_risk`; plus `risk_reduction` and `extra_distance_m`. 422 on invalid input or a point too far from a street, 503 when the graph file is missing. Cell scores are read for the bbox of the two points padded by 1.5 km. The graph path comes from `GRAPH_PATH`.
+- On Modal the graph is built by the `build_graph` function into the Volume `london-risk-graph` (the public Overpass servers were unreachable or restricted from the development machine), and the `Store` container mounts that Volume.
+- Client: `RoutePanel` (pick origin and destination on the map, safety slider, comparison table) and a deck.gl `PathLayer` (fast in grey, safe in green).
 
 ## 11. Repository layout
 
@@ -248,7 +257,14 @@ backend/
   llm.py            pydantic-ai extraction agent: prompt, tools, guardrails, model from env
   prefilter.py      headline/category filter that runs before the agent
   sources/          one module per source: fetch() -> list[RawItem], to_event(raw) -> Event | None
-  routing.py        phase 2
+  routing.py        compact graph format, edge risk and costs, fast/safe shortest paths
+  api_route.py      POST /api/route
+  api_stream.py     GET /api/stream (SSE)
+  api_inject.py     POST /api/inject
+  features.py       GeoJSON form of an event
+  extraction.py     pre-filter, then LLM agent or rule-based extractor
+  llm.py            pydantic-ai extraction agent, tools, guardrails
+  located.py        Event construction from a geocoded place
   sql/schema.sql
   tests/
 web/

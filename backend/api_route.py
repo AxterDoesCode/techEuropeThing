@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import threading
 from pathlib import Path
@@ -22,6 +23,8 @@ _M_PER_DEG_LNG = 69_300.0  # at latitude 51.5
 _graph: routing.Graph | None = None
 _graph_path: str | None = None
 _graph_lock = threading.Lock()
+# Street-level crime baseline for the loaded graph, keyed by the crime data month
+_baseline: tuple[str, str, Any] | None = None
 
 
 def graph_path() -> str:
@@ -66,13 +69,35 @@ def _scores_near(origin: tuple[float, float], destination: tuple[float, float]) 
         max(origin[0], destination[0]) + pad_lng,
         max(origin[1], destination[1]) + pad_lat,
     )
-    return {c.h3: c.score for c in db.cell_scores(FINE_RES, 0.0, bbox)}
+    # Live component only: the crime baseline is applied per street, not per cell
+    return {c.h3: c.live for c in db.cell_scores(FINE_RES, 0.0, bbox) if c.live > 0}
+
+
+def get_baseline(graph: routing.Graph) -> Any:
+    """Per-edge crime baseline; recomputed when the graph or the crime month changes.
+    None when no crime data is loaded."""
+    global _baseline
+    month = db.latest_crime_month()
+    if month is None:
+        return None
+    with _graph_lock:
+        if _baseline is None or _baseline[:2] != (graph_path(), month):
+            payload = json.loads(db.latest_crime_points_json() or "{}")
+            _baseline = (graph_path(), month, routing.edge_baseline(graph, payload.get("rows", [])))
+        return _baseline[2]
 
 
 @router.post("/api/route")
 def post_route(req: RouteRequest) -> dict[str, Any]:
     graph = get_graph()
     try:
-        return routing.route(graph, req.origin, req.destination, _scores_near(req.origin, req.destination), req.alpha)
+        return routing.route(
+            graph,
+            req.origin,
+            req.destination,
+            _scores_near(req.origin, req.destination),
+            req.alpha,
+            baseline=get_baseline(graph),
+        )
     except routing.RouteError as exc:
         raise HTTPException(422, str(exc))

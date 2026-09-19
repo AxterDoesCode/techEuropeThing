@@ -82,8 +82,8 @@ def build(
     download_s = time.monotonic() - started
 
     # One record per street segment; to_undirected keeps parallel edges whose geometry differs
-    U = ox.convert.to_undirected(G)
-    U = ox.truncate.largest_component(U)
+    # largest_component needs the directed graph osmnx returns
+    U = ox.convert.to_undirected(ox.truncate.largest_component(G))
 
     index = {node: i for i, node in enumerate(U.nodes)}
     node_lng = [d["x"] for _, d in U.nodes(data=True)]

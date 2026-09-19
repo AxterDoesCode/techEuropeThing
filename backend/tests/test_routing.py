@@ -185,3 +185,60 @@ def test_api_route_errors(client, monkeypatch, tmp_path):
     monkeypatch.setenv("GRAPH_PATH", str(tmp_path / "missing.npz"))
     missing = client.post("/api/route", json=ok)
     assert missing.status_code == 503 and "build_graph" in missing.json()["detail"]
+
+
+def crime_row(row: float, col: float, weighted: float) -> list:
+    lng, lat = lnglat(row, col)
+    return [lng, lat, int(weighted), weighted, "On or near Test Street", {}]
+
+
+def test_edge_baseline_is_per_street(graph):
+    # Crime points on the top row between columns 2 and 3; the row below is 100 m away
+    base = routing.edge_baseline(graph, [crime_row(0, 2.5, 30.0), crime_row(0, 2.4, 10.0)])
+    m = graph.n_undirected
+    assert base.shape == (2 * m,) and np.array_equal(base[:m], base[m:])
+    assert 0 <= base.min() and base.max() == pytest.approx(1.0)
+
+    def edge(a: int, b: int) -> int:
+        for k in range(m):
+            if {int(graph.edge_src[k]), int(graph.edge_dst[k])} == {a, b}:
+                return k
+        raise AssertionError("no such edge")
+
+    assert base[edge(node(0, 2), node(0, 3))] == pytest.approx(1.0)
+    # the parallel street one block south is within the 120 m radius but much lower
+    assert 0 < base[edge(node(1, 2), node(1, 3))] < base[edge(node(0, 2), node(0, 3))]
+    # a street three blocks away is unaffected
+    assert base[edge(node(3, 2), node(3, 3))] == 0
+    assert not routing.edge_baseline(graph, []).any()
+
+
+def test_baseline_alone_moves_the_safe_route_one_street_over(graph):
+    base = routing.edge_baseline(graph, [crime_row(0, c + 0.5, 40.0) for c in range(5)])
+    plain = routing.route(graph, lnglat(0, 0), lnglat(0, 5), {}, alpha=10)
+    assert plain["safe"]["geometry"] == plain["fast"]["geometry"]
+    res = routing.route(graph, lnglat(0, 0), lnglat(0, 5), {}, alpha=10, baseline=base)
+    assert res["safe"]["mean_risk"] < res["fast"]["mean_risk"]
+    assert res["extra_distance_m"] > 0
+    assert res["fast"]["max_risk"] == pytest.approx(routing.BASELINE_WEIGHT)
+
+
+def test_combined_risk_matches_cell_score_formula():
+    live = np.array([0.0, 0.5, 1.0]); base = np.array([1.0, 0.5, 0.2])
+    assert routing.combined_risk(live, None) is live
+    assert routing.combined_risk(live, base) == pytest.approx([0.4, 0.6, 1.0])
+
+
+def test_api_uses_crime_points_and_recomputes_for_a_new_month(client, monkeypatch):
+    monkeypatch.setattr(api_route, "_baseline", None)
+    repo = SqliteRepo()
+    # live risk is removed so only the street-level baseline can cause a detour
+    repo.replace_cell_scores([], utcnow())
+    body = {"origin": lnglat(0, 0), "destination": lnglat(0, 5), "alpha": 10}
+    assert client.post("/api/route", json=body).json()["extra_distance_m"] == 0
+
+    repo.save_crime_points("2026-07", {"month": "2026-07", "rows": [crime_row(0, c + 0.5, 40.0) for c in range(5)]})
+    assert client.post("/api/route", json=body).json()["extra_distance_m"] > 0
+
+    repo.save_crime_points("2026-08", {"month": "2026-08", "rows": []})
+    assert client.post("/api/route", json=body).json()["extra_distance_m"] == 0
