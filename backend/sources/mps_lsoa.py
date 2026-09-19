@@ -14,8 +14,10 @@ Method (build):
    undirected edge is assigned to the LSOA containing its midpoint. The rate of
    an LSOA is W / 12 / L, in weighted crimes per street-km per month.
    Approximation: an LSOA that the graph does not cover (not fully inside the
-   graph bbox, or under MIN_STREET_KM of edges), and every LSOA when there is no
-   graph, takes L = area x D_med, where D_med is the median street density
+   graph bbox, under MIN_STREET_KM of edges, or a street density under
+   MIN_DENSITY_RATIO x D_med, which in the inner-London graph is missing graph
+   data, e.g. 0.6 km for the 1 km2 of the Greenwich Peninsula, not a real street
+   network), and every LSOA when there is no graph, takes L = area x D_med, where D_med is the median street density
    (km per km2) of the covered LSOAs. Its rate is then the areal crime density
    divided by one London-wide constant, which puts both regimes on one scale but
    ignores the LSOA's own street density.
@@ -29,10 +31,16 @@ Method (build):
    rate, and equal to the plain monthly areal density for an LSOA of median
    street density (and for every LSOA in the area regime, where S = W / 12).
    The unit of `weighted` stays "weighted crimes per month".
+   S is then reduced by the share of the LSOA's police.uk records that sit on
+   recording venues (RECORDING_VENUES: hospital, police station, prison). The
+   MPS totals include those records, and without the reduction they would be
+   moved onto the streets around the venue. The share comes from one month.
 4. Within an LSOA, S is split over its police.uk street points (one month,
    relevant categories, venue points removed) with
    share = (count + k) / (sum + k x n), k = SHRINK_K. An LSOA without points gets
-   one row at a point inside the polygon, labelled with the LSOA name.
+   rows of equal weight at the centres of the H3 res-10 cells (about 130 m apart)
+   inside the polygon, labelled with the LSOA name: a uniform density, because
+   nothing is known about the distribution inside it.
 """
 
 from __future__ import annotations
@@ -44,6 +52,7 @@ from collections.abc import Iterable, Iterator
 from dataclasses import dataclass
 from typing import Any
 
+import h3
 import httpx
 import numpy as np
 import shapely
@@ -92,7 +101,14 @@ POLICE_UK_FALLBACK_WEIGHT = {
 CITY_OF_LONDON_PREFIX = "City of London "
 
 MIN_STREET_KM = 0.5
+MIN_DENSITY_RATIO = 0.25
+# Subset of police_uk.VENUE_LABELS where the record is an artefact of where the
+# crime was reported or the suspect was held. Records at the other venue labels
+# (supermarket, shopping area, ...) are offences in a public place: their points
+# are dropped, but their share of the LSOA total stays on the LSOA's streets.
+RECORDING_VENUES = ("hospital", "police station", "prison")
 SHRINK_K = 1.0
+FILL_RES = 10
 
 # Same equirectangular projection as scoring.py and routing.py
 _M_PER_DEG_LAT = 111_320.0
@@ -139,7 +155,7 @@ class Baseline:
 def resolve_csv_url(client: httpx.Client) -> str:
     """URL of the newest "LSOA Level Crime (most recent 24 months)" resource. The
     path segment changes with every monthly release."""
-    resp = client.get(DATASET_API)
+    resp = client.get(DATASET_API, follow_redirects=True)  # 307 to /api/v2/
     resp.raise_for_status()
     found = [
         r for r in resp.json()["resources"].values()
@@ -158,7 +174,7 @@ def parse_counts(lines: Iterable[str], months: int = MONTHS) -> tuple[str, dict[
     month columns. Columns: LSOA Code, LSOA Name, Borough, Group, SubGroup, then
     one column per month named YYYYMM."""
     reader = csv.reader(lines)
-    header = [h.strip().lstrip("﻿") for h in next(reader)]
+    header = [h.strip().lstrip("\ufeff") for h in next(reader)]
     code_i, name_i, sub_i = header.index("LSOA Code"), header.index("LSOA Name"), header.index("SubGroup")
     month_cols = sorted((h, i) for i, h in enumerate(header) if re.fullmatch(r"\d{6}", h))
     if len(month_cols) < months:
@@ -284,6 +300,10 @@ def normalise(lsoas: dict[str, Lsoa], graph: Any | None) -> float | None:
         a.from_graph = whole and a.graph_km >= MIN_STREET_KM
     covered = [a.graph_km / a.area_km2 for a in lsoas.values() if a.from_graph]
     d_med = statistics.median(covered) if covered else None
+    if d_med is not None:
+        # The median is taken before this exclusion; the few LSOAs it removes do not move it
+        for a in lsoas.values():
+            a.from_graph = a.from_graph and a.graph_km / a.area_km2 >= MIN_DENSITY_RATIO * d_med
     for a in lsoas.values():
         monthly = a.weighted_12m / MONTHS
         if a.from_graph and d_med is not None:
@@ -302,12 +322,23 @@ def normalise(lsoas: dict[str, Lsoa], graph: Any | None) -> float | None:
 # --- street points ---
 
 
+def _fill_positions(polygon: BaseGeometry) -> list[tuple[float, float]]:
+    """Centres of the H3 cells (FILL_RES) whose centre is inside the polygon; one
+    position inside the polygon when it is too small to contain a cell centre."""
+    cells = h3.geo_to_cells(polygon, FILL_RES)
+    if not cells:
+        pos = polygon.representative_point()
+        return [(round(pos.x, 6), round(pos.y, 6))]
+    return [(round(lng, 6), round(lat, 6)) for lat, lng in (h3.cell_to_latlng(c) for c in sorted(cells))]
+
+
 def distribute(lsoas: dict[str, Lsoa], points: list[CrimePoint], k: float = SHRINK_K) -> list[CrimePoint]:
     """Set `weighted` of the street points so that the points of each LSOA sum to
     its point_weight. The share of a point is (count + k) / (sum + k x n): with
     k = 0 proportional to the one month of counts, with large k uniform. Points
     outside every LSOA are dropped (the MPS data covers London only). An LSOA
-    without points gets one row at a position inside its polygon."""
+    without points gets rows of equal weight on a grid inside its polygon
+    (_fill_positions), with count 0."""
     ordered = list(lsoas.values())
     at = _locate(ordered, np.array([p.lng for p in points]), np.array([p.lat for p in points]))
     members: dict[int, list[CrimePoint]] = {}
@@ -319,14 +350,43 @@ def distribute(lsoas: dict[str, Lsoa], points: list[CrimePoint], k: float = SHRI
         inside = members.get(i)
         if not inside:
             if a.point_weight > 0:
-                pos = a.polygon.representative_point()
-                out.append(CrimePoint(round(pos.x, 6), round(pos.y, 6), f"LSOA {a.name}", weighted=a.point_weight))
+                positions = _fill_positions(a.polygon)
+                out.extend(
+                    CrimePoint(lng, lat, f"LSOA {a.name}", weighted=a.point_weight / len(positions))
+                    for lng, lat in positions
+                )
             continue
         denominator = sum(p.count for p in inside) + k * len(inside)
         for p in inside:
             p.weighted = a.point_weight * (p.count + k) / denominator
         out.extend(inside)
     return out
+
+
+def subtract_recording_venues(lsoas: dict[str, Lsoa], crimes: list[dict[str, Any]]) -> float:
+    """Multiply point_weight by 1 - venue / (all + SHRINK_K): the LSOA's records at
+    RECORDING_VENUES and all its records, over the relevant police.uk categories
+    of the month. SHRINK_K keeps an LSOA with very few records from being removed
+    entirely. Returns the total point weight removed."""
+    records = [c for c in crimes if c["category"] in police_uk.RELEVANT_CATEGORIES and c.get("location")]
+    ordered = list(lsoas.values())
+    at = _locate(
+        ordered,
+        np.array([float(c["location"]["longitude"]) for c in records]),
+        np.array([float(c["location"]["latitude"]) for c in records]),
+    )
+    total = np.bincount(at[at >= 0], minlength=len(ordered))
+    is_recording = np.array(
+        [any(v in c["location"]["street"]["name"].lower() for v in RECORDING_VENUES) for c in records], dtype=bool
+    )
+    venue = np.bincount(at[(at >= 0) & is_recording], minlength=len(ordered))
+    removed = 0.0
+    for a, n, v in zip(ordered, total, venue):
+        if v:
+            share = v / (n + SHRINK_K)
+            removed += a.point_weight * share
+            a.point_weight *= 1 - share
+    return removed
 
 
 def add_police_uk_counts(lsoas: dict[str, Lsoa], crimes: list[dict[str, Any]]) -> int:
@@ -364,12 +424,14 @@ def combine(
     """Steps 1 to 4 on fetched inputs. No network access."""
     city = add_police_uk_counts(lsoas, crimes)
     d_med = normalise(lsoas, graph)
+    removed = subtract_recording_venues(lsoas, crimes)
     street_points = police_uk.aggregate_points(crimes)
     points = distribute(lsoas, street_points)
     stats = {
         "lsoas": len(lsoas),
         "lsoas_from_graph": sum(a.from_graph for a in lsoas.values()),
         "lsoas_from_police_uk": city,
+        "recording_venue_weight_removed": round(float(removed), 1),
         "crimes": len(crimes),
         "street_points": len(street_points),
         "rows": len(points),
