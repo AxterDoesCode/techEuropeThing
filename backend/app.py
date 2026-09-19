@@ -44,9 +44,11 @@ app = modal.App(APP_NAME, image=image)
 volume = modal.Volume.from_name("london-risk-db", create_if_missing=True)
 # Walking graph for /api/route, written by build_graph and read by the Store
 graph_volume = modal.Volume.from_name("london-risk-graph", create_if_missing=True)
-# Optional Modal secret `london-risk` (TFL_APP_KEY, LLM_MODEL and the provider key).
-# Deploy with LONDON_RISK_SECRET=1 once it exists; without it no secret is attached.
-secrets = [modal.Secret.from_name("london-risk")] if os.environ.get("LONDON_RISK_SECRET") else []
+# Modal secret `london-risk`: LLM_MODEL, GOOGLE_API_KEY, optionally TFL_APP_KEY. It
+# must be attached unconditionally: the module is imported again inside each
+# container, and a condition that differs there changes the function's
+# dependencies, which makes every container fail at start.
+secrets = [modal.Secret.from_name("london-risk")]
 
 VOLUME_DIR = "/data"
 SNAPSHOT_PATH = f"{VOLUME_DIR}/risk.sqlite"

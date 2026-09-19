@@ -275,7 +275,7 @@ web/
 SPEC.md
 ```
 
-Optional Modal secret `london-risk`: `TFL_APP_KEY`, `LLM_MODEL` and the matching provider key. Deploy with `LONDON_RISK_SECRET=1` to attach it. No database credentials exist.
+Modal secret `london-risk` (required; attached unconditionally, because a condition that evaluates differently inside the container makes every container fail at start): `LLM_MODEL`, `GOOGLE_API_KEY`, optionally `TFL_APP_KEY`. No database credentials exist.
 
 ## 12. Build order
 

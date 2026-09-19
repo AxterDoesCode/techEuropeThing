@@ -28,7 +28,7 @@ Deployed 2026-09-19: API at `https://alexchau256--london-risk-store-api.modal.ru
 
 Walking routes need the street graph. On Modal: `modal run -m backend.app::build_graph` (writes to the Volume `london-risk-graph`), then redeploy so the `Store` loads it. Locally: `python -m backend.tools.build_graph` writes `data/graph/walk.npz` (needs a reachable Overpass server; pass `--overpass-url` for a mirror).
 
-Optional secret for a TfL key and, later, the LLM: `modal secret create london-risk TFL_APP_KEY=...`, then deploy with `LONDON_RISK_SECRET=1`.
+Modal secret `london-risk` (required; the app attaches it unconditionally): `LLM_MODEL=google:gemini-3.8-flash`, `GOOGLE_API_KEY`, optionally `TFL_APP_KEY`.
 
 ## Web
 
