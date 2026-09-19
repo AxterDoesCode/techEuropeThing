@@ -67,7 +67,31 @@ def connect(path: str | Path) -> None:
         if "extracted_with" not in columns:
             _conn.execute("alter table raw_items add column extracted_with text")
         _migrate_events(_conn)
+        _retire_sources(_conn)
         _conn.commit()
+
+
+# Sources that were removed from the code after they had been deployed. Their
+# rows are deleted from an existing database file so they are no longer polled or
+# listed by /api/agents.
+RETIRED_SOURCES = ("ea_floods",)
+
+
+def _retire_sources(conn: sqlite3.Connection) -> None:
+    """Idempotent. raw_items and agent_runs reference sources(id), so their rows go
+    first. Events that only came from the source are ended, not deleted, so the
+    normal residual decay and the stream's event_end apply."""
+    now = _ts(utcnow())
+    for source_id in RETIRED_SOURCES:
+        if conn.execute("select 1 from sources where id = ?", [source_id]).fetchone() is None:
+            continue
+        conn.execute(
+            "update events set ended_at = ?, is_ongoing = 0, updated_at = ? where external_ref like ? and ended_at is null",
+            [now, now, f"{source_id}:%"],
+        )
+        conn.execute("delete from raw_items where source_id = ?", [source_id])
+        conn.execute("delete from agent_runs where source_id = ?", [source_id])
+        conn.execute("delete from sources where id = ?", [source_id])
 
 
 # Event columns added after the first deployment: name -> column definition

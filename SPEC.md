@@ -80,7 +80,7 @@ A single dispatcher cron is used instead of one cron per source because Modal's 
 
 ### Agent types
 
-1. **Structured pollers** — TfL road (`tfl_road`), TfL station disruptions (`tfl_transit`), EA floods (`ea_floods`), police.uk (one-off `backfill_police`). Deterministic field mapping. No LLM. Open-Meteo is not built. A snapshot source ends events that leave its feed; an empty fetch ends nothing unless the source sets `empty_is_valid` (floods: no warnings is the normal state).
+1. **Structured pollers** — TfL road (`tfl_road`), TfL station disruptions (`tfl_transit`), police.uk (one-off `backfill_police`). Deterministic field mapping. No LLM. Open-Meteo is not built. A snapshot source ends events that leave its feed; an empty fetch ends nothing unless the source sets `empty_is_valid` (floods: no warnings is the normal state).
 2. **Extraction agents** — RSS news feeds, later social sources. Implemented so far: `met_news` with the code pre-filter, the geocoder, and a rule-based extractor (`extract_rules.py`: keyword category/severity, place from headline patterns, one incident per item) that is used while no LLM is configured. Met statements are published hours after the incident, so `met_news` events use a 24 h half-life instead of the category default. A tool-using LLM agent (`pydantic-ai`) with output type `list[ExtractedEvent]`; one article can describe zero, one or several incidents.
 
 ### Extraction agent

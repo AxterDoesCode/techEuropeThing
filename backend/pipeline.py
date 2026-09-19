@@ -10,7 +10,6 @@ from . import extraction, llm
 from .models import CellScore, Event, RawItem, utcnow
 from .scoring import FINE_RES, compute_cell_scores
 from .sources.base import StructuredSource
-from .sources.ea_floods import EaFloodsSource
 from .sources.met_news import MetNewsSource
 from .sources.rss import BbcLondonSource, EveningStandardSource, MyLondonSource
 from .sources.tfl_road import TflRoadSource
@@ -21,7 +20,6 @@ SOURCES: dict[str, StructuredSource] = {
     for s in [
         TflRoadSource(),
         TflTransitSource(),
-        EaFloodsSource(),
         MetNewsSource(),
         BbcLondonSource(),
         EveningStandardSource(),
