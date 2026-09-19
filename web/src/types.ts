@@ -70,7 +70,11 @@ export interface AgentStatus {
 export type CrimeRow = [number, number, number, number, string, Record<string, number>]
 
 export interface CrimePoints {
+  // latest police.uk month, used for the street points
   month: string
+  // months of MPS LSOA data behind the weights, e.g. "2025-09..2026-08"
+  period?: string
+  method?: string
   columns: string[]
   rows: CrimeRow[]
 }
@@ -119,3 +123,23 @@ export interface RouteResult {
 }
 
 export type RouteEndpoint = 'origin' | 'destination'
+
+// Official wide-area alert covering London (GET /api/alerts). Shown as a notice
+// only: alerts are not events and do not affect the risk map or routing.
+export type AlertLevel = 'yellow' | 'amber' | 'red'
+
+export interface OfficialAlert {
+  id: string
+  source: 'met_office' | 'uk_emergency_alerts'
+  source_label: string
+  level: AlertLevel
+  // Met Office: the weather type ("extreme heat"). Emergency Alerts: "emergency alert"
+  hazard: string
+  headline: string
+  // Page of this alert at the publisher; the Met Office terms require a direct link
+  url: string
+  starts_at: string
+  ends_at: string | null
+  // false = not in force yet (starts within 24 h)
+  active: boolean
+}

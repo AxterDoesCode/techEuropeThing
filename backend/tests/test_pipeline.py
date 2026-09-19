@@ -75,13 +75,13 @@ def test_to_event_maps_fields():
         for d in FIXTURE
     }
     serious = events["TIMS-206772"]
-    assert serious.severity == 0.55
+    assert serious.severity == 0.4
     assert serious.geometry["type"] == "MultiLineString"
     assert serious.external_ref == "tfl_road:TIMS-206772"
     assert serious.half_life_min is None
     assert serious.occurred_at.tzinfo is not None
-    assert serious.title.startswith("TfL works: [A12]")
-    # "No impact" items produce no event
+    assert serious.title.startswith("Vehicle collision: [A12]")
+    # the roadworks item produces no event (allow-list: see test_tfl_road.py)
     assert [i for i, e in events.items() if e is None] == ["TEST-NO-IMPACT"]
     # items without a polygon fall back to the point
     assert any(e and e.geometry["type"] == "Point" for e in events.values())

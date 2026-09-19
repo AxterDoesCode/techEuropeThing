@@ -9,28 +9,40 @@ from __future__ import annotations
 
 import hashlib
 import json
-import math
 import os
 import sqlite3
 import threading
 from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any, Iterable, Iterator
+from typing import TYPE_CHECKING, Any, Iterable, Iterator
 from uuid import UUID, uuid4
 
 import h3
 
-from .models import CATEGORY_DEFAULTS, ENDED_HALF_LIFE_MIN, Category, CellScore, Event, RawItem, utcnow
+from .models import (
+    CATEGORY_DEFAULTS,
+    MAX_FRESHNESS_H,
+    MAX_HARD_CAP_H,
+    Category,
+    CellScore,
+    Event,
+    RawItem,
+    utcnow,
+)
 from .scoring import (
     _M_PER_DEG_LAT,
     _M_PER_DEG_LNG,
     MERGE_WINDOW,
-    MIN_EVENT_RISK,
     distance_m,
+    event_risk,
     merge,
+    same_time,
     should_merge,
 )
+
+if TYPE_CHECKING:
+    from .alerts import Alert
 
 SCHEMA_PATH = Path(__file__).parent / "sql" / "schema.sql"
 
@@ -54,7 +66,36 @@ def connect(path: str | Path) -> None:
         columns = {r["name"] for r in _conn.execute("pragma table_info(raw_items)")}
         if "extracted_with" not in columns:
             _conn.execute("alter table raw_items add column extracted_with text")
+        _migrate_events(_conn)
         _conn.commit()
+
+
+# Event columns added after the first deployment: name -> column definition
+_EVENT_COLUMNS_ADDED = {
+    "subtype": "text",
+    "is_ongoing": "integer not null default 0",
+    "feed_managed": "integer not null default 0",
+    "last_confirmed_at": "text",
+}
+
+
+def _migrate_events(conn: sqlite3.Connection) -> None:
+    """Add the lifecycle columns to an events table created by an older schema.
+    Does nothing when they exist. Older rows: a row with half_life_min null came
+    from a snapshot feed, so it becomes feed_managed, and is_ongoing unless it has
+    ended; every other row is a one-off incident (is_ongoing 0). last_confirmed_at
+    is set to updated_at. The half_life_min column stays in an older file and is
+    no longer read or written."""
+    columns = {r["name"] for r in conn.execute("pragma table_info(events)")}
+    added = [name for name in _EVENT_COLUMNS_ADDED if name not in columns]
+    for name in added:
+        conn.execute(f"alter table events add column {name} {_EVENT_COLUMNS_ADDED[name]}")
+    if "feed_managed" in added and "half_life_min" in columns:
+        conn.execute(
+            "update events set feed_managed = 1, is_ongoing = (ended_at is null) where half_life_min is null"
+        )
+    if "last_confirmed_at" in added:
+        conn.execute("update events set last_confirmed_at = updated_at where last_confirmed_at is null")
 
 
 def snapshot(dest: str | Path) -> None:
@@ -93,7 +134,8 @@ def _event_from_row(row: sqlite3.Row) -> Event:
     d = dict(row)
     for key in ("geometry", "source_confidence", "source_ids", "raw_item_ids", "urls"):
         d[key] = json.loads(d[key])
-    for key in ("h3_r10", "h3_r9", "h3_r7", "created_at", "updated_at"):
+    # half_life_min exists only in database files created by an older schema
+    for key in ("h3_r10", "h3_r9", "h3_r7", "created_at", "updated_at", "half_life_min"):
         d.pop(key, None)
     return Event.model_validate(d)
 
@@ -115,10 +157,13 @@ def _event_params(ev: Event, now: str) -> dict[str, Any]:
         "severity": ev.severity,
         "confidence": ev.confidence,
         "source_confidence": json.dumps(ev.source_confidence),
-        "half_life_min": ev.half_life_min,
+        "subtype": ev.subtype,
         "occurred_at": _ts(ev.occurred_at),
         "expires_at": _ts(ev.expires_at),
         "ended_at": _ts(ev.ended_at),
+        "is_ongoing": int(ev.is_ongoing),
+        "feed_managed": int(ev.feed_managed),
+        "last_confirmed_at": _ts(ev.last_confirmed_at) or now,
         "source_ids": json.dumps(ev.source_ids),
         "raw_item_ids": json.dumps(ev.raw_item_ids),
         "urls": json.dumps(ev.urls),
@@ -127,7 +172,10 @@ def _event_params(ev: Event, now: str) -> dict[str, Any]:
 
 
 # Columns whose change makes an upsert write (and bump updated_at)
-_COMPARED = ("category", "title", "summary", "geometry", "lng", "lat", "radius_m", "severity", "expires_at", "occurred_at")
+_COMPARED = (
+    "category", "subtype", "title", "summary", "geometry", "lng", "lat", "radius_m", "severity",
+    "expires_at", "occurred_at", "is_ongoing", "feed_managed",
+)
 
 
 def _event_by_ref(conn: sqlite3.Connection, ref: str | None) -> Event | None:
@@ -172,7 +220,7 @@ def _merge_candidates(
         f"""
         select * from events
         where category in ({', '.join('?' * len(categories))})
-          and occurred_at between ? and ?
+          and (occurred_at between ? and ? or (is_ongoing and occurred_at < ?))
           and (ended_at is null or ended_at >= ?)
           and abs(lat - ?) * ? <= max(?, radius_m)
           and abs(lng - ?) * ? <= max(?, radius_m)
@@ -181,6 +229,7 @@ def _merge_candidates(
             *categories,
             _ts(occurred_at - MERGE_WINDOW),
             _ts(occurred_at + MERGE_WINDOW),
+            _ts(occurred_at),
             _ts(occurred_at - MERGE_WINDOW),
             lat, _M_PER_DEG_LAT, radius_m,
             lng, _M_PER_DEG_LNG, radius_m,
@@ -189,6 +238,9 @@ def _merge_candidates(
     found = []
     for row in rows:
         ev = _event_from_row(row)
+        # An event that started earlier matches only if it was in progress at occurred_at
+        if not same_time(ev, ev.model_copy(update={"occurred_at": occurred_at, "is_ongoing": False})):
+            continue
         d = distance_m(lng, lat, ev.lng, ev.lat)
         if d <= max(radius_m, ev.radius_m):
             found.append((d, ev))
@@ -224,10 +276,10 @@ def _merge_target(conn: sqlite3.Connection, ev: Event, exclude_id: str | None = 
 
 
 def _merge_keeping_feed_end(existing: Event, new: Event) -> Event:
-    """scoring.merge, except that an event without decay (half_life_min None) is
-    ended only by its own feed, so a report folded into it does not clear ended_at."""
+    """scoring.merge, except that a feed-managed event is ended only by its own
+    feed, so a report folded into it does not change ended_at."""
     out = merge(existing, new)
-    if existing.half_life_min is None:
+    if existing.feed_managed:
         out.ended_at = existing.ended_at
     return out
 
@@ -236,12 +288,22 @@ def _refresh_merged(existing: Event, ev: Event) -> Event:
     """Re-apply a report that is already part of the merged row `existing`.
     Summary is filled when empty, urls and raw_item_ids are unioned, severity
     only rises and geometry is replaced only by a more precise one. Confidence,
-    category and occurred_at are left unchanged. ended_at is cleared only when the
-    report is the row's own external_ref reappearing upstream."""
-    ended_at = None if ev.external_ref == existing.external_ref else existing.ended_at
-    return merge(existing, ev).model_copy(
+    category and occurred_at are left unchanged. last_confirmed_at is refreshed
+    only when the report says the event is in progress. For a feed-managed row,
+    ended_at is cleared when the report is the row's own external_ref reappearing
+    upstream; otherwise ended_at follows scoring.merge (a resolution ends the event)."""
+    merged = merge(existing, ev)
+    ended_at = merged.ended_at
+    if existing.feed_managed:
+        ended_at = None if ev.external_ref == existing.external_ref else existing.ended_at
+    last_confirmed_at = merged.last_confirmed_at if ev.is_ongoing else existing.last_confirmed_at
+    own_feed_row = existing.feed_managed and ev.external_ref == existing.external_ref
+    return merged.model_copy(
         update={
             "category": existing.category,
+            "subtype": existing.subtype or (ev.subtype if ev.category == existing.category else None),
+            "last_confirmed_at": last_confirmed_at,
+            "expires_at": ev.expires_at if own_feed_row else merged.expires_at,
             "confidence": existing.confidence,
             "source_confidence": existing.source_confidence,
             "occurred_at": existing.occurred_at,
@@ -253,7 +315,9 @@ def _refresh_merged(existing: Event, ev: Event) -> Event:
 def _write_merged(conn: sqlite3.Connection, ev: Event, now: str) -> None:
     conn.execute(
         """
-        update events set external_ref = :external_ref, category = :category, summary = :summary,
+        update events set external_ref = :external_ref, category = :category, subtype = :subtype,
+          summary = :summary, expires_at = :expires_at, is_ongoing = :is_ongoing,
+          last_confirmed_at = :last_confirmed_at,
           geometry = :geometry, lng = :lng, lat = :lat, radius_m = :radius_m,
           h3_r10 = :h3_r10, h3_r9 = :h3_r9, h3_r7 = :h3_r7, severity = :severity,
           confidence = :confidence, source_confidence = :source_confidence,
@@ -333,6 +397,11 @@ class SqliteRepo:
            to that row.
         3. Otherwise insert a new row and map its ref to it.
 
+        A report with resolution "false_alarm" never inserts a row: it ends the
+        event it belongs to (paths 1 and 2) or is dropped. last_confirmed_at is
+        set on insert, refreshed by every merge (path 2), and on path 1 when the
+        report says the event is in progress.
+
         An incoming event from a structured feed (mergeable False) never takes
         path 2, so a structured ref is always the external_ref of its own row.
         """
@@ -364,11 +433,34 @@ class SqliteRepo:
                     _map_ref(conn, ev.external_ref, str(target.id))
                     merged += 1
                     continue
+                if ev.resolution == "false_alarm":
+                    if existing is not None:
+                        # the report that created this row now says it was a false alarm
+                        ended = merge(existing, ev).model_copy(
+                            update={"confidence": existing.confidence, "source_confidence": existing.source_confidence}
+                        )
+                        if ended != existing:
+                            _write_merged(conn, ended, now)
+                    continue
                 row = None
                 if existing is not None:
                     params["id"] = str(existing.id)
+                    if not ev.feed_managed:
+                        # A report seen again confirms the event only if it says it is in progress
+                        confirmed = [existing.last_confirmed_at or existing.occurred_at]
+                        if ev.is_ongoing:
+                            confirmed.append(ev.last_confirmed_at or utcnow())
+                        elif existing.is_ongoing:
+                            # The report no longer says the event is in progress: it
+                            # ended at the time of this version of the report, not at
+                            # occurred_at, which can be days earlier.
+                            params["is_ongoing"] = 1
+                            params["ended_at"] = _ts(
+                                existing.ended_at or max(ev.last_confirmed_at or utcnow(), confirmed[0])
+                            )
+                        params["last_confirmed_at"] = _ts(max(confirmed))
                     row = conn.execute(
-                        f"select id, ended_at, {', '.join(_COMPARED)} from events where id = ?",
+                        f"select id, ended_at, last_confirmed_at, {', '.join(_COMPARED)} from events where id = ?",
                         [params["id"]],
                     ).fetchone()
                 if row is None:
@@ -377,26 +469,32 @@ class SqliteRepo:
                         insert into events (
                           id, external_ref, category, title, summary, geometry, lng, lat, radius_m,
                           h3_r10, h3_r9, h3_r7, severity, confidence, source_confidence,
-                          half_life_min, occurred_at, expires_at, ended_at,
-                          source_ids, raw_item_ids, urls, created_at, updated_at)
+                          subtype, occurred_at, expires_at, ended_at, is_ongoing, feed_managed,
+                          last_confirmed_at, source_ids, raw_item_ids, urls, created_at, updated_at)
                         values (
                           :id, :external_ref, :category, :title, :summary, :geometry, :lng, :lat,
                           :radius_m, :h3_r10, :h3_r9, :h3_r7, :severity, :confidence,
-                          :source_confidence, :half_life_min, :occurred_at, :expires_at, :ended_at,
-                          :source_ids, :raw_item_ids, :urls, :now, :now)
+                          :source_confidence, :subtype, :occurred_at, :expires_at, :ended_at,
+                          :is_ongoing, :feed_managed, :last_confirmed_at, :source_ids, :raw_item_ids, :urls, :now, :now)
                         """,
                         params,
                     )
                     _map_ref(conn, ev.external_ref, params["id"])
                     inserted += 1
-                elif row["ended_at"] is not None or any(row[c] != params[c] for c in _COMPARED):
+                elif (
+                    row["ended_at"] != params["ended_at"]
+                    or any(row[c] != params[c] for c in _COMPARED)
+                    or (not ev.feed_managed and row["last_confirmed_at"] != params["last_confirmed_at"])
+                ):
                     conn.execute(
                         """
-                        update events set category = :category, title = :title, summary = :summary,
+                        update events set category = :category, subtype = :subtype, title = :title,
+                          summary = :summary, is_ongoing = :is_ongoing, feed_managed = :feed_managed,
+                          last_confirmed_at = :last_confirmed_at,
                           geometry = :geometry, lng = :lng, lat = :lat, radius_m = :radius_m,
                           h3_r10 = :h3_r10, h3_r9 = :h3_r9, h3_r7 = :h3_r7, severity = :severity,
                           expires_at = :expires_at, occurred_at = :occurred_at,
-                          ended_at = null, updated_at = :now
+                          ended_at = :ended_at, updated_at = :now
                         where id = :id
                         """,
                         params,
@@ -407,7 +505,8 @@ class SqliteRepo:
         self, category: str, lng: float, lat: float, occurred_at: datetime, radius_m: float
     ) -> list[Event]:
         """Events a new report at (lng, lat, occurred_at) could describe: same
-        category group, occurred_at within MERGE_WINDOW, centroid within
+        category group, occurred_at within MERGE_WINDOW (or the event started
+        earlier and was in progress at occurred_at), centroid within
         max(radius_m, event radius) metres, and not ended more than MERGE_WINDOW
         before occurred_at. Sorted by distance."""
         with _tx() as conn:
@@ -440,7 +539,7 @@ class SqliteRepo:
         are never folded into another row (see upsert_events), so every ref of a
         snapshot source is the external_ref of its own row. A row that started as
         a news report carries a news ref, which no snapshot source's prefix
-        matches (news sources have snapshot = False); it ends by half-life decay.
+        matches (news sources have snapshot = False); its end follows scoring.event_end.
         A structured row with news reports folded in is ended here when its feed
         drops it, which is the intended behaviour.
         """
@@ -452,7 +551,7 @@ class SqliteRepo:
             ).fetchall()
             missing = [r["external_ref"] for r in rows if r["external_ref"] not in seen]
             conn.executemany(
-                "update events set ended_at = ?, updated_at = ? where external_ref = ?",
+                "update events set ended_at = ?, is_ongoing = 0, updated_at = ? where external_ref = ?",
                 [(_ts(at), _ts(at), ref) for ref in missing],
             )
         return len(missing)
@@ -509,11 +608,11 @@ class SqliteRepo:
             )
 
     def scoring_candidates(self, now: datetime) -> list[Event]:
-        """Events that can still have risk above the scoring threshold. The SQL
-        filter is a loose bound; event_risk applies the exact rule."""
-        # severity * confidence <= 1, so risk < threshold after this many half-lives
-        n = math.ceil(math.log2(1 / MIN_EVENT_RISK))
-        ended_cutoff = _ts(now - timedelta(minutes=ENDED_HALF_LIFE_MIN * n))
+        """Events whose risk at `now` is above 0. The SQL filter is a loose bound
+        (the largest hard cap and freshness window of the timing table);
+        event_risk applies the exact rule."""
+        ended_cutoff = _ts(now - timedelta(hours=MAX_HARD_CAP_H))
+        confirmed_cutoff = _ts(now - timedelta(hours=MAX_HARD_CAP_H + MAX_FRESHNESS_H))
         with _tx() as conn:
             rows = conn.execute(
                 """
@@ -521,12 +620,12 @@ class SqliteRepo:
                 where occurred_at <= :now
                   and (ended_at is null or ended_at >= :ended_cutoff)
                   and (expires_at is null or expires_at >= :ended_cutoff)
-                  and (half_life_min is null
-                       or julianday(:now) - julianday(occurred_at) <= half_life_min * :n / 1440.0)
+                  and (feed_managed or coalesce(last_confirmed_at, occurred_at) >= :confirmed_cutoff)
                 """,
-                {"now": _ts(now), "ended_cutoff": ended_cutoff, "n": n},
+                {"now": _ts(now), "ended_cutoff": ended_cutoff, "confirmed_cutoff": confirmed_cutoff},
             ).fetchall()
-        return [_event_from_row(r) for r in rows]
+        events = [_event_from_row(r) for r in rows]
+        return [ev for ev in events if event_risk(ev, now) > 0]
 
     def baseline(self, res: int) -> dict[str, float]:
         with _tx() as conn:
@@ -578,6 +677,17 @@ class SqliteRepo:
                 [query, r.get("lng"), r.get("lat"), r.get("precision_m"), r.get("label"),
                  r.get("provider"), _ts(utcnow())],
             )
+
+    # Alert feeds. The storage functions are at the end of this file; these methods
+    # make them reachable through Store.call for pollers in other containers.
+    def claim_alerts_poll(self, now: datetime, interval_s: float, sources: list[str]) -> bool:
+        return claim_alerts_poll(now, interval_s, sources)
+
+    def replace_alerts(self, source: str, alerts: list[Alert], fetched_at: datetime) -> dict[str, int]:
+        return replace_alerts(source, alerts, fetched_at)
+
+    def record_alerts_failure(self, source: str, error: str, at: datetime) -> None:
+        record_alerts_failure(source, error, at)
 
 
 # Read queries used by the API
@@ -731,3 +841,79 @@ def changes_since(since: datetime, limit: int = 500) -> dict[str, Any]:
         "truncated": truncated,
         "mark": mark,
     }
+
+
+# Official alerts (backend/alerts.py). Not events: nothing here touches scoring.
+
+
+def claim_alerts_poll(now: datetime, interval_s: float, sources: list[str]) -> bool:
+    """True when the alert feeds are due: a source has never been attempted, or the
+    oldest attempt is at least `interval_s` old. The attempt time of every source is
+    then set to `now` in the same transaction, so two callers cannot both get True."""
+    with _tx() as conn:
+        rows = conn.execute("select source, last_attempt_at from alert_polls").fetchall()
+        last = {r["source"]: r["last_attempt_at"] for r in rows}
+        threshold = _ts(now - timedelta(seconds=interval_s))
+        due = any(last.get(s) is None or last[s] <= threshold for s in sources)
+        if due:
+            conn.executemany(
+                "insert into alert_polls (source, last_attempt_at) values (?, ?)"
+                " on conflict (source) do update set last_attempt_at = excluded.last_attempt_at",
+                [(s, _ts(now)) for s in sources],
+            )
+    return due
+
+
+def replace_alerts(source: str, alerts: list[Alert], fetched_at: datetime) -> dict[str, int]:
+    """Make the stored alerts of `source` equal to `alerts`: upsert them and delete
+    the source's other rows, so a withdrawn warning disappears. Called only after a
+    successful fetch; an empty list is a valid result (nothing in force)."""
+    ts = _ts(fetched_at)
+    with _tx() as conn:
+        for a in alerts:
+            if a.source != source:
+                raise ValueError(f"alert {a.id!r} does not belong to source {source!r}")
+            conn.execute(
+                "insert or replace into alerts (id, source, level, hazard, headline, area_text, url,"
+                " starts_at, ends_at, fetched_at, raw) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                [a.id, a.source, a.level, a.hazard, a.headline, a.area_text, a.url, _ts(a.starts_at),
+                 _ts(a.ends_at), ts, json.dumps(a.raw, separators=(",", ":"), ensure_ascii=False)],
+            )
+        keep = [a.id for a in alerts]
+        marks = ",".join("?" * len(keep))
+        deleted = conn.execute(
+            f"delete from alerts where source = ? and id not in ({marks})", [source, *keep]
+        ).rowcount
+        conn.execute(
+            "insert into alert_polls (source, last_attempt_at, last_success_at, last_error) values (?, ?, ?, null)"
+            " on conflict (source) do update set last_success_at = excluded.last_success_at, last_error = null",
+            [source, ts, ts],
+        )
+    return {"stored": len(alerts), "deleted": deleted}
+
+
+def record_alerts_failure(source: str, error: str, at: datetime) -> None:
+    """A failed fetch changes only the poll state; the source's alerts stay."""
+    with _tx() as conn:
+        conn.execute(
+            "insert into alert_polls (source, last_attempt_at, last_error) values (?, ?, ?)"
+            " on conflict (source) do update set last_error = excluded.last_error",
+            [source, _ts(at), error],
+        )
+
+
+def stored_alerts() -> list[dict[str, Any]]:
+    """All stored alerts. Times are returned as datetimes; `raw` is left out.
+    `fetched_at` is the time of the last successful poll that listed the alert."""
+    with _tx() as conn:
+        rows = conn.execute(
+            "select a.id, a.source, a.level, a.hazard, a.headline, a.area_text, a.url, a.starts_at,"
+            " a.ends_at, a.fetched_at from alerts a order by a.starts_at, a.id"
+        ).fetchall()
+    out = []
+    for r in rows:
+        d = dict(r)
+        for key in ("starts_at", "ends_at", "fetched_at"):
+            d[key] = datetime.fromisoformat(d[key]) if d[key] else None
+        out.append(d)
+    return out

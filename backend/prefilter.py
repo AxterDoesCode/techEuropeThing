@@ -13,7 +13,7 @@ _NOT_INCIDENT = re.compile(
 )
 _INCIDENT = re.compile(
     r"\b(stabb|shoot|shot|murder|attack|assault|rape|robber|collision|crash|fire|"
-    r"explosion|acid|disorder|protest|dies|died|death|critical|injur|appeal|witness|"
+    r"explosion|acid|disorder|protest|riot|demonstrat|terror|bomb|blaze|dies|died|death|critical|injur|appeal|witness|"
     r"missing|evacuat|cordon|arrest)\w*\b",
     re.I,
 )

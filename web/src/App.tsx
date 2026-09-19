@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { API_BASE, CRIME_REFRESH_MS, fetchAgents, fetchCrimePoints, POLL_INTERVAL_MS } from './api'
+import { ALERTS_REFRESH_MS, API_BASE, CRIME_REFRESH_MS, fetchAgents, fetchAlerts, fetchCrimePoints, POLL_INTERVAL_MS } from './api'
 import { usePolling } from './usePolling'
 import { useLiveEvents } from './useLiveEvents'
 import { RiskMap, type MapTarget } from './map/RiskMap'
@@ -9,6 +9,7 @@ import { AgentPanel } from './panels/AgentPanel'
 import { LayerPanel } from './panels/LayerPanel'
 import { RoutePanel } from './panels/RoutePanel'
 import { SearchBox } from './panels/SearchBox'
+import { AlertBanner } from './panels/AlertBanner'
 import { useRouteState } from './route'
 import { formatCoord } from './format'
 import { useTheme } from './theme'
@@ -28,6 +29,7 @@ export default function App() {
   }, [agentRuns])
   const agents = usePolling(loadAgents, POLL_INTERVAL_MS)
   const crime = usePolling(fetchCrimePoints, CRIME_REFRESH_MS)
+  const alerts = usePolling(fetchAlerts, ALERTS_REFRESH_MS)
   const [settings, updateSettings] = useLayerSettings()
 
   const [selectedId, setSelectedId] = useState<string | null>(null)
@@ -109,6 +111,24 @@ export default function App() {
     [routing.origin, routing.destination],
   )
   const sidebarOpen = !settings.sidebarCollapsed
+  const toggleSidebar = useCallback(
+    () => changeSettings({ sidebarCollapsed: sidebarOpen }),
+    [changeSettings, sidebarOpen],
+  )
+  // The B key toggles the sidebar, except while text is being entered, a modifier
+  // key is held, or the list of the search box is open
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key.toLowerCase() !== 'b' || e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return
+      if (e.isComposing || e.repeat || e.defaultPrevented) return
+      const el = e.target instanceof HTMLElement ? e.target : null
+      if (el && (el.isContentEditable || el.closest('input, textarea, select'))) return
+      if (document.querySelector('[role="combobox"][aria-expanded="true"]')) return
+      toggleSidebar()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [toggleSidebar])
 
   return (
     <div className="app">
@@ -130,8 +150,9 @@ export default function App() {
         routeEndpoints={routeEndpoints}
         picking={routing.picking !== null}
       />
+      <AlertBanner alerts={alerts.data} sidebarOpen={sidebarOpen} />
       {/* Kept mounted while collapsed so the panels keep their state */}
-      <aside className="left" hidden={!sidebarOpen}>
+      <aside className="left" id="sidebar" hidden={!sidebarOpen}>
         <header className="panel header">
           <h1>London Live Risk Map</h1>
           {API_BASE && (
@@ -142,7 +163,6 @@ export default function App() {
           </button>
           <div className="view-controls">
             <button type="button" onClick={resetView}>Reset view</button>
-            <button type="button" onClick={() => changeSettings({ sidebarCollapsed: true })}>Hide sidebar</button>
           </div>
           {error && <p className="error">{error}</p>}
         </header>
@@ -175,9 +195,19 @@ export default function App() {
         />
         <AgentPanel agents={agents.data ?? []} />
       </aside>
+      <button
+        type="button"
+        className={`sidebar-tab ${sidebarOpen ? '' : 'collapsed'}`}
+        onClick={toggleSidebar}
+        aria-label={sidebarOpen ? 'Hide sidebar' : 'Show sidebar'}
+        aria-expanded={sidebarOpen}
+        aria-controls="sidebar"
+        title={sidebarOpen ? 'Hide sidebar (B)' : 'Show sidebar (B)'}
+      >
+        <span aria-hidden="true">{sidebarOpen ? '‹' : '›'}</span>
+      </button>
       {!sidebarOpen && (
         <div className="panel view-controls collapsed-controls">
-          <button type="button" onClick={() => changeSettings({ sidebarCollapsed: false })}>Show sidebar</button>
           <button type="button" onClick={resetView}>Reset view</button>
         </div>
       )}
