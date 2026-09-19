@@ -10,6 +10,9 @@ Graph file (.npz, written by backend/tools/build_graph.py through save_graph):
                                      format 1: 1 when the OSM tag lit == "yes", else 0
   edge_class           uint8   [2M]  format 2 only: index into CLASS_NAMES
   edge_flags           uint8   [2M]  format 2 only: bitfield FLAG_*
+  edge_name            uint32  [M]   optional: index into the name table, 0 = no name
+  name_table           uint8         optional: UTF-8 bytes of the names joined by "\n";
+                                     entry 0 is the empty string
   cell_offsets         int32   [M+1] CSR over undirected edges
   cells                uint64        H3 res-9 cells (h3.str_to_int) the edge passes through
   geom_offsets         int32   [M+1] CSR over undirected edges, in points
@@ -177,6 +180,9 @@ class Graph:
     # format 1 files have no class or flags: residential and 0 are filled in
     edge_class: np.ndarray
     edge_flags: np.ndarray
+    # per undirected edge; all 0 when the file has no names
+    edge_name: np.ndarray
+    names: list[str]
     meta: dict[str, Any]
     bbox: tuple[float, float, float, float]
     # 1: edge_lit is 0/1 and the cost uses beta; 2: classes, flags, 3-level lit
@@ -251,7 +257,9 @@ def classify(tags: dict[str, Any]) -> tuple[int, int]:
         if name == "service" and "alley" in service:
             name = "alley"
         names.append(name)
-    name = max(names, key=CLASS_MULTIPLIER.__getitem__) if names else "other"
+    # equal multipliers: the class listed first in CLASS_NAMES, so the result
+    # does not depend on the order osmnx lists the merged values in
+    name = max(names, key=lambda c: (CLASS_MULTIPLIER[c], -CLASS_INDEX[c])) if names else "other"
 
     flags = 0
     if set(names) == {"footway"} and footway and set(footway) <= {"sidewalk", "crossing"}:
@@ -307,10 +315,12 @@ def build_arrays(
     meta: dict[str, Any],
 ) -> dict[str, np.ndarray]:
     """File arrays (format 2) from undirected edges
-    (u, v, coords from u to v, length_m, lit[, edge_class[, edge_flags]]).
+    (u, v, coords from u to v, length_m, lit[, edge_class[, edge_flags[, name]]]).
     `lit` is LIT_NO / LIT_UNKNOWN / LIT_YES, or a bool (False unlit, True lit).
-    The class defaults to residential and the flags to 0."""
+    The class defaults to residential, the flags to 0 and the name to none."""
     src, dst, length, lit, classes, flags = [], [], [], [], [], []
+    name_index: dict[str, int] = {"": 0}
+    names = []
     cell_offsets, cells, geom_offsets, geom = [0], [], [0], []
     for u, v, coords, length_m, edge_lit, *rest in edges:
         src.append(u)
@@ -321,6 +331,8 @@ def build_arrays(
         lit.append(int(edge_lit))
         classes.append(int(rest[0]) if rest else CLASS_INDEX["residential"])
         flags.append(int(rest[1]) if len(rest) > 1 else 0)
+        name = (rest[2] or "").replace("\n", " ").strip() if len(rest) > 2 else ""
+        names.append(name_index.setdefault(name, len(name_index)))
         cells.extend(edge_cells(coords))
         cell_offsets.append(len(cells))
         geom.extend(coords)
@@ -334,6 +346,8 @@ def build_arrays(
         "edge_lit": np.asarray(lit + lit, dtype=np.uint8),
         "edge_class": np.asarray(classes + classes, dtype=np.uint8),
         "edge_flags": np.asarray(flags + flags, dtype=np.uint8),
+        "edge_name": np.asarray(names, dtype=np.uint32),
+        "name_table": np.frombuffer("\n".join(name_index).encode(), dtype=np.uint8),
         "cell_offsets": np.asarray(cell_offsets, dtype=np.int32),
         "cells": np.asarray(cells, dtype=np.uint64),
         "geom_offsets": np.asarray(geom_offsets, dtype=np.int32),
@@ -359,6 +373,9 @@ def load_graph(path: str | Path) -> Graph:
     if fmt == 1:
         a["edge_class"] = np.full(len(src), CLASS_INDEX["residential"], dtype=np.uint8)
         a["edge_flags"] = np.zeros(len(src), dtype=np.uint8)
+    names = a["name_table"].tobytes().decode().split("\n") if "name_table" in a else [""]
+    if "edge_name" not in a:
+        a["edge_name"] = np.zeros(len(src) // 2, dtype=np.uint32)
     # arrays added by a later format are ignored by this code
     a = {k: v for k, v in a.items() if k in Graph.__dataclass_fields__}
 
@@ -381,6 +398,7 @@ def load_graph(path: str | Path) -> Graph:
         **a,
         meta=meta,
         bbox=bbox,
+        names=names,
         format=fmt,
         edge_multiplier=edge_multipliers(a["edge_class"], a["edge_flags"]),
         tree=cKDTree(_xy(lng, lat)),
@@ -522,6 +540,144 @@ def _edge_coords(graph: Graph, edge: int) -> np.ndarray:
     return coords[::-1] if edge >= m else coords
 
 
+# Turn-by-turn steps. A step shorter than MIN_STEP_M is merged into a neighbour:
+# crossings and junction fragments would otherwise each produce an instruction.
+MIN_STEP_M = 15.0
+# The direction of a step at its start or end is measured over this distance
+BEARING_SPAN_M = 15.0
+CONTINUE_BELOW_DEG, BEAR_BELOW_DEG, TURN_UP_TO_DEG = 25.0, 60.0, 150.0
+_COMPASS = ("north", "north-east", "east", "south-east", "south", "south-west", "west", "north-west")
+# Unnamed stretches: label -> wording after "onto" / "on"
+UNNAMED_PHRASE = {
+    "underpass": "an underpass",
+    "indoor passage": "an indoor passage",
+    "path through park": "a path through the park",
+    "pavement": "the pavement",
+    "steps": "the steps",
+    "footpath": "a footpath",
+    "track": "a track",
+    "alley": "an alley",
+    "service road": "a service road",
+    "unnamed road": "an unnamed road",
+}
+
+
+def unnamed_label(edge_class: int, flags: int) -> str:
+    name = CLASS_NAMES[edge_class] if edge_class < len(CLASS_NAMES) else "other"
+    if flags & FLAG_UNDERPASS:
+        return "underpass"
+    if flags & FLAG_INDOOR:
+        return "indoor passage"
+    if name == "steps":
+        return "steps"
+    if flags & FLAG_IN_PARK:
+        return "path through park"
+    if flags & FLAG_SIDEWALK:
+        return "pavement"
+    if name in ("footway", "path", "cycleway", "pedestrian"):
+        return "footpath"
+    if name in ("bridleway", "track"):
+        return "track"
+    return {"alley": "alley", "service": "service road"}.get(name, "unnamed road")
+
+
+def bearing_deg(a: Sequence[float], b: Sequence[float]) -> float:
+    """Compass bearing in degrees [0, 360) from a to b, both in the metre
+    projection of _xy (x east, y north)."""
+    return math.degrees(math.atan2(b[0] - a[0], b[1] - a[1])) % 360.0
+
+
+def turn_instruction(bearing_in: float, bearing_out: float) -> str:
+    """Wording for the change from bearing_in to bearing_out, without the street."""
+    change = (bearing_out - bearing_in + 180.0) % 360.0 - 180.0  # (-180, 180], positive = right
+    side = "right" if change > 0 else "left"
+    if abs(change) < CONTINUE_BELOW_DEG:
+        return "Continue"
+    if abs(change) < BEAR_BELOW_DEG:
+        return f"Bear {side}"
+    if abs(change) <= TURN_UP_TO_DEG:
+        return f"Turn {side}"
+    return "Turn around"
+
+
+def _end_bearing(xy: np.ndarray, at_start: bool) -> float:
+    """Bearing of travel over the first (or last) BEARING_SPAN_M of a polyline."""
+    pts = xy if at_start else xy[::-1]
+    along = np.r_[0.0, np.cumsum(np.hypot(*np.diff(pts, axis=0).T))]
+    k = min(int(np.searchsorted(along, BEARING_SPAN_M)), len(pts) - 1)
+    # duplicate points: extend until the two points differ
+    while k < len(pts) - 1 and along[k] == 0:
+        k += 1
+    return bearing_deg(pts[0], pts[k]) if at_start else bearing_deg(pts[k], pts[0])
+
+
+def merge_steps(groups: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """`groups` are {"label", "edges", "length"} in route order. Consecutive groups
+    with one label are joined; a group shorter than MIN_STEP_M is then added to
+    the previous group (the first one to the next), keeping that group's label."""
+    def coalesce(items):
+        out: list[dict[str, Any]] = []
+        for g in items:
+            if out and out[-1]["label"] == g["label"]:
+                out[-1] = {**out[-1], "edges": out[-1]["edges"] + g["edges"], "length": out[-1]["length"] + g["length"]}
+            else:
+                out.append(dict(g))
+        return out
+
+    groups = coalesce(groups)
+    while len(groups) > 1:
+        short = next((i for i, g in enumerate(groups) if g["length"] < MIN_STEP_M), None)
+        if short is None:
+            break
+        keep = short - 1 if short else 1
+        a, b = sorted((keep, short))
+        merged = {"label": groups[keep]["label"], "edges": groups[a]["edges"] + groups[b]["edges"],
+                  "length": groups[a]["length"] + groups[b]["length"]}
+        groups = coalesce(groups[:a] + [merged] + groups[b + 1:])
+    return groups
+
+
+def route_steps(graph: Graph, edges: list[int], risk: np.ndarray) -> list[dict[str, Any]]:
+    """Turn-by-turn steps of a route. Consecutive edges with the same street name
+    form a step; unnamed edges are grouped by unnamed_label."""
+    m = graph.n_undirected
+    groups = []
+    for e in edges:
+        name = graph.names[graph.edge_name[e % m]]
+        label = ("name", name) if name else ("unnamed", unnamed_label(int(graph.edge_class[e]), int(graph.edge_flags[e])))
+        groups.append({"label": label, "edges": [e], "length": float(graph.edge_length[e])})
+
+    steps = []
+    previous_bearing = None
+    for g in merge_steps(groups):
+        coords = np.vstack([_edge_coords(graph, e) for e in g["edges"]]).astype(np.float64)
+        xy = _xy(coords[:, 0], coords[:, 1])
+        kind, text = g["label"]
+        where = text if kind == "name" else UNNAMED_PHRASE[text]
+        start_bearing = _end_bearing(xy, at_start=True)
+        if previous_bearing is None:
+            instruction = f"Head {_COMPASS[int((start_bearing + 22.5) // 45) % 8]} on {where}"
+        else:
+            instruction = f"{turn_instruction(previous_bearing, start_bearing)} onto {where}"
+        previous_bearing = _end_bearing(xy, at_start=False)
+        length = graph.edge_length[g["edges"]].astype(np.float64)
+        total = float(length.sum())
+        lit = graph.edge_lit[g["edges"]] == (LIT_YES if graph.format == 2 else 1)
+        steps.append({
+            "instruction": instruction,
+            "street": text if kind == "name" else None,
+            "distance_m": round(total, 1),
+            "duration_s": round(total / WALK_SPEED_M_S, 1),
+            "lit": bool(length[lit].sum() > total / 2),
+            "risk": round(float((length * risk[g["edges"]]).sum() / total), 4),
+            "start": coords[0].round(6).tolist(),
+        })
+    end = _edge_coords(graph, edges[-1])[-1].astype(np.float64).round(6).tolist()
+    steps.append({"instruction": "Arrive at destination", "street": None, "distance_m": 0.0, "duration_s": 0.0,
+                  "lit": steps[-1]["lit"], "risk": 0.0, "start": end})
+    return steps
+
+
 def path_risk(risk: np.ndarray, length_m: np.ndarray) -> float:
     """REVISIT(path-risk-score): placeholder score of a whole route in [0, 1),
     1 - exp(-PATH_RISK_K * sum(risk * metres)). See PATH_RISK_K."""
@@ -553,6 +709,7 @@ def _describe(graph: Graph, edges: list[int], risk: np.ndarray) -> dict[str, Any
         "main_road_share": round(float(length[main].sum() / total), 4),
         "park_m": round(float(length[(flags & FLAG_IN_PARK) > 0].sum()), 1),
         "underpass_m": round(float(length[(flags & FLAG_UNDERPASS) > 0].sum()), 1),
+        "steps": route_steps(graph, edges, risk),
     }
 
 

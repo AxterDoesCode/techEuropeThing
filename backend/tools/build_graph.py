@@ -30,6 +30,7 @@ from pathlib import Path
 import numpy as np
 
 from ..routing import (
+    CLASS_INDEX,
     CLASS_NAMES,
     FLAG_IN_PARK,
     FLAG_SIDEWALK,
@@ -37,6 +38,8 @@ from ..routing import (
     LIT_NO,
     LIT_UNKNOWN,
     LIT_YES,
+    _values,
+    _xy,
     build_arrays,
     classify,
     infer_lit,
@@ -54,9 +57,10 @@ TILE_ATTEMPTS = 4
 
 # Way tags kept on edges. highway, footway, service, tunnel, covered, indoor and
 # lit are read by routing.classify / infer_lit; oneway and junction are read by
-# osmnx itself; the rest are kept for inspection of the intermediate graph.
+# osmnx itself; name (or ref, e.g. "A501", when there is no name) labels the
+# steps of a route; the rest are kept for inspection of the intermediate graph.
 WAY_TAGS = ["highway", "footway", "service", "tunnel", "covered", "indoor", "level", "lit", "foot",
-            "access", "bridge", "oneway", "junction"]
+            "access", "bridge", "oneway", "junction", "name", "ref"]
 
 # Polygons that set FLAG_IN_PARK on the edges whose midpoint is inside them:
 # open green space that is unlit and has few people in it after dark. Gardens
@@ -138,7 +142,6 @@ def _with_retries(what: str, fetch):
 
 def _download(bbox: tuple[float, float, float, float], tile_km: float, limit_s: int, pause_s: float):
     """(unsimplified graph of the whole bbox, park polygons)."""
-    import networkx as nx
     import osmnx as ox
 
     def on_alarm(signum, frame):
@@ -160,8 +163,14 @@ def _download(bbox: tuple[float, float, float, float], tile_km: float, limit_s: 
             part = _with_retries(f"tile {i} streets", lambda: ox.graph_from_bbox(
                 box, network_type="walk", custom_filter=custom_filter,
                 simplify=False, retain_all=True, truncate_by_edge=True))
-            if part is not None:
-                G = part if G is None else nx.compose(G, part)
+            if part is None:
+                pass
+            elif G is None:
+                G = part
+            else:
+                # in place (nx.compose would copy the whole graph for every tile); an
+                # edge present in both has the same (u, v, key) and is stored once
+                G.update(edges=part.edges(keys=True, data=True), nodes=part.nodes(data=True))
             del part
             found = _with_retries(f"tile {i} parks", lambda: ox.features_from_bbox(box, PARK_TAGS))
             if found is not None:
@@ -197,6 +206,63 @@ def _in_park(midpoints: np.ndarray, parks: list) -> np.ndarray:
         hits = tree.query(shapely.points(midpoints), predicate="within")
         inside[np.unique(hits[0])] = True
     return inside
+
+
+# An unnamed sidewalk takes the name of a named road when a point of that road
+# is within this distance of the sidewalk's midpoint and the two run within
+# this angle of each other. Crossings run across the road, fail the angle test
+# and stay unnamed.
+SIDEWALK_NAME_RADIUS_M = 30.0
+SIDEWALK_NAME_ANGLE_DEG = 25.0
+_ROAD_CLASSES = [CLASS_INDEX[c] for c in ("trunk", "primary", "secondary", "tertiary", "residential", "pedestrian")]
+
+
+def _axis_deg(a: np.ndarray, b: np.ndarray) -> float:
+    """Direction of the line a-b in degrees [0, 180), in the metre projection."""
+    return math.degrees(math.atan2(b[0] - a[0], b[1] - a[1])) % 180.0
+
+
+def name_sidewalks(records: list[dict]) -> int:
+    """Fill `name` of unnamed FLAG_SIDEWALK records from the nearest named road
+    that runs parallel. Returns the number of records named."""
+    from scipy.spatial import cKDTree
+
+    points, axes, names = [], [], []
+    for r in records:
+        if r["name"] and r["edge_class"] in _ROAD_CLASSES:
+            xy = _xy(*np.asarray(r["coords"], dtype=np.float64).T)
+            for a, b in zip(xy[:-1], xy[1:]):
+                d = float(np.hypot(*(b - a)))
+                if d == 0:
+                    continue
+                # a point every 10 m along the segment, the segment start included
+                for t in np.arange(0.0, 1.0, 10.0 / max(d, 10.0)):
+                    points.append(a + (b - a) * t)
+                    axes.append(_axis_deg(a, b))
+                    names.append(r["name"])
+    if not points:
+        return 0
+    tree = cKDTree(np.asarray(points))
+    named = 0
+    for r in records:
+        if r["name"] or not r["flags"] & FLAG_SIDEWALK:
+            continue
+        xy = _xy(*np.asarray(r["coords"], dtype=np.float64).T)
+        seg = np.hypot(*np.diff(xy, axis=0).T)
+        if seg.sum() == 0:
+            continue
+        k = int(np.searchsorted(np.cumsum(seg), seg.sum() / 2))
+        axis = _axis_deg(xy[k], xy[k + 1])
+        mid = _xy(*_midpoint(r["coords"]))[0]
+        dist, idx = tree.query(mid, k=8, distance_upper_bound=SIDEWALK_NAME_RADIUS_M)
+        for d, i in zip(dist, idx):
+            if np.isfinite(d):
+                diff = abs(axes[i] - axis) % 180.0
+                if min(diff, 180.0 - diff) <= SIDEWALK_NAME_ANGLE_DEG:
+                    r["name"] = names[i]
+                    named += 1
+                    break
+    return named
 
 
 def _midpoint(coords: list[list[float]]) -> list[float]:
@@ -269,16 +335,22 @@ def build(
         if "lit" in d:
             lit_tagged += 1
         edge_class, flags = classify(d)
-        records.append((index[u], index[v], coords, float(d["length"]), d.get("lit"), edge_class, flags))
+        # merged ways with different names: the first; without a name, the road number
+        label = (_values(d.get("name")) or _values(d.get("ref")) or [""])[0]
+        records.append({"u": index[u], "v": index[v], "coords": coords, "length": float(d["length"]),
+                        "lit": d.get("lit"), "edge_class": edge_class, "flags": flags, "name": label})
     del U
 
-    inside = _in_park(np.asarray([_midpoint(r[2]) for r in records]).reshape(-1, 2), parks)
+    inside = _in_park(np.asarray([_midpoint(r["coords"]) for r in records]).reshape(-1, 2), parks)
+    for r, park in zip(records, inside):
+        if park:
+            r["flags"] |= FLAG_IN_PARK
+    sidewalks_named = name_sidewalks(records)
 
     def edges():
-        for (u, v, coords, length_m, lit, edge_class, flags), park in zip(records, inside):
-            if park:
-                flags |= FLAG_IN_PARK
-            yield u, v, coords, length_m, infer_lit(lit, edge_class, flags), edge_class, flags
+        for r in records:
+            yield (r["u"], r["v"], r["coords"], r["length"], infer_lit(r["lit"], r["edge_class"], r["flags"]),
+                   r["edge_class"], r["flags"], r["name"])
 
     meta = {
         "format": 2,
@@ -312,6 +384,8 @@ def build(
         "in_park_km": round(float(length[(flags & FLAG_IN_PARK) > 0].sum()) / 1000, 1),
         "underpass_km": round(float(length[(flags & FLAG_UNDERPASS) > 0].sum()) / 1000, 1),
         "park_polygons": len(parks),
+        "names": len(set(r["name"] for r in records if r["name"])),
+        "sidewalks_named_from_road": sidewalks_named,
     }
     arrays["meta"] = np.asarray(json.dumps(meta))
     save_graph(out, arrays)
