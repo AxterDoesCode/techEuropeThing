@@ -1,0 +1,1045 @@
+[
+ {
+  "$type": "Tfl.Api.Presentation.Entities.RoadDisruption, Tfl.Api.Presentation.Entities",
+  "id": "TIMS-206772",
+  "url": "/Road/All/Disruption/TIMS-206772",
+  "point": "[0.212921,51.592491]",
+  "severity": "Serious",
+  "ordinal": 1,
+  "category": "Works",
+  "subCategory": "TfL works",
+  "comments": "Gallows Corner Flyover Refurbishment - [A12] Eastern Avenue East (All directions) at the junction of [A12] Colchester Road - Gallows Corner flyover and roundabout is closed on A12 and A127 and all approaches to facilitate reconstructing and resurfacing. ",
+  "currentUpdate": "Gallows Corner approaches are closed as follows, (A12) Eastern Avenue eastbound at Pettits Lane.  (A12) Colchester Road westbound is closed at Whitelands Way.   (A118) Main Road eastbound closed at Upper Brentwood Road, (A127) Southend Arterial Road westbound closed at Squirrels Heath Road, Straight Road is closed southbound at Shenstone Gardens. Northbound traffic on Southend Arterial Road is slow moving with queues leading back to Wingley Lane. Northbound traffic is slow moving on Ardleigh Green Road with queues from Nelmes Way. Additionally Eastbound traffic along Squirrels Heath Lane is slow moving with queues from Upper Brentwood Road. Expect delays on diversion. \r\n\r\n\r\n",
+  "currentUpdateDateTime": "2026-09-19T12:14:05Z",
+  "corridorIds": [
+   "a12"
+  ],
+  "startDateTime": "2025-03-15T21:00:00Z",
+  "endDateTime": "2026-09-30T22:59:00Z",
+  "lastModifiedTime": "2026-09-19T12:14:27Z",
+  "levelOfInterest": "High",
+  "location": "[A12] EASTERN AVENUE EAST (RM2 ,RM3 ) (Havering)",
+  "status": "Active",
+  "geography": {
+   "type": "Point",
+   "coordinates": [
+    0.212921,
+    51.592491
+   ],
+   "crs": {
+    "type": "name",
+    "properties": {
+     "name": "EPSG:4326"
+    }
+   }
+  },
+  "geometry": {
+   "type": "MultiPolygon",
+   "coordinates": [
+    [
+     [
+      [
+       0.2224324539,
+       51.5873183268
+      ],
+      [
+       0.2224884556,
+       51.5871492478
+      ],
+      [
+       0.2226426535,
+       51.5870057968
+      ],
+      [
+       0.2237196734,
+       51.5864875672
+      ],
+      [
+       0.2239960634,
+       51.5864543686
+      ],
+      [
+       0.2242718092,
+       51.5864895845
+      ],
+      [
+       0.2245049323,
+       51.5865878538
+      ],
+      [
+       0.2246599425,
+       51.5867342162
+      ],
+      [
+       0.2247048128,
+       51.5869723004
+      ],
+      [
+       0.2245687576,
+       51.5871735727
+      ],
+      [
+       0.2234313164,
+       51.5877377312
+      ],
+      [
+       0.2230824289,
+       51.5877700927
+      ],
+      [
+       0.2227506141,
+       51.5876955494
+      ],
+      [
+       0.2225151965,
+       51.5875319217
+      ],
+      [
+       0.2224324539,
+       51.5873183268
+      ]
+     ]
+    ],
+    [
+     [
+      [
+       0.1810990022,
+       51.5922764115
+      ],
+      [
+       0.1811668374,
+       51.5920751383
+      ],
+      [
+       0.1813715263,
+       51.5919137641
+      ],
+      [
+       0.1816702004,
+       51.5918260851
+      ],
+      [
+       0.1820003095,
+       51.5918304633
+      ],
+      [
+       0.1833064227,
+       51.5922723874
+      ],
+      [
+       0.1842783143,
+       51.5925190939
+      ],
+      [
+       0.1943771692,
+       51.5947040202
+      ],
+      [
+       0.1952067621,
+       51.5948189051
+      ],
+      [
+       0.1963958014,
+       51.5948881385
+      ],
+      [
+       0.1972579875,
+       51.5948804856
+      ],
+      [
+       0.198294349,
+       51.594793764
+      ],
+      [
+       0.1992941398,
+       51.5946479324
+      ],
+      [
+       0.2000022503,
+       51.5945086149
+      ],
+      [
+       0.204849932,
+       51.5933517358
+      ],
+      [
+       0.2071609844,
+       51.5928779545
+      ],
+      [
+       0.2082903055,
+       51.5926935033
+      ],
+      [
+       0.2099579869,
+       51.5924699725
+      ],
+      [
+       0.210904767,
+       51.5924478963
+      ],
+      [
+       0.2112782878,
+       51.5924108012
+      ],
+      [
+       0.2100442735,
+       51.5917469847
+      ],
+      [
+       0.209343134,
+       51.5912340265
+      ],
+      [
+       0.2092626016,
+       51.5910435958
+      ],
+      [
+       0.209307363,
+       51.5908704809
+      ],
+      [
+       0.2094550749,
+       51.5907212131
+      ],
+      [
+       0.2097157983,
+       51.5906098294
+      ],
+      [
+       0.2100632252,
+       51.5905804695
+      ],
+      [
+       0.2103918485,
+       51.5906565889
+      ],
+      [
+       0.2113143744,
+       51.5912573169
+      ],
+      [
+       0.2121334664,
+       51.5916867957
+      ],
+      [
+       0.2126955609,
+       51.5919232396
+      ],
+      [
+       0.2130257471,
+       51.5918676445
+      ],
+      [
+       0.2140275617,
+       51.5912406261
+      ],
+      [
+       0.2148067115,
+       51.5908033062
+      ],
+      [
+       0.2162024355,
+       51.5900977926
+      ],
+      [
+       0.2193911939,
+       51.5885818006
+      ],
+      [
+       0.2196020733,
+       51.5885258448
+      ],
+      [
+       0.2197856793,
+       51.5885127906
+      ],
+      [
+       0.2201449352,
+       51.5883781392
+      ],
+      [
+       0.220489509,
+       51.5883649674
+      ],
+      [
+       0.2207176937,
+       51.5884167599
+      ],
+      [
+       0.2208819034,
+       51.5884967224
+      ],
+      [
+       0.2210025631,
+       51.5886025893
+      ],
+      [
+       0.2210750975,
+       51.5887469658
+      ],
+      [
+       0.221038082,
+       51.5889607694
+      ],
+      [
+       0.2208458303,
+       51.5891393822
+      ],
+      [
+       0.2159449235,
+       51.5915292907
+      ],
+      [
+       0.2143358602,
+       51.5925248113
+      ],
+      [
+       0.2144719004,
+       51.5926129771
+      ],
+      [
+       0.2145727747,
+       51.5927350945
+      ],
+      [
+       0.2146097279,
+       51.5928704848
+      ],
+      [
+       0.2145793084,
+       51.5930065042
+      ],
+      [
+       0.2144514516,
+       51.593158153
+      ],
+      [
+       0.214288938,
+       51.5932509677
+      ],
+      [
+       0.2140890085,
+       51.593308879
+      ],
+      [
+       0.2138613549,
+       51.593326202
+      ],
+      [
+       0.2138801742,
+       51.59375006
+      ],
+      [
+       0.2136727356,
+       51.594562194
+      ],
+      [
+       0.213582362,
+       51.5946814592
+      ],
+      [
+       0.2134402923,
+       51.5947792492
+      ],
+      [
+       0.2130885488,
+       51.5948765728
+      ],
+      [
+       0.2128419042,
+       51.5948729263
+      ],
+      [
+       0.2126116506,
+       51.5948177403
+      ],
+      [
+       0.2124247084,
+       51.5947174671
+      ],
+      [
+       0.2123029341,
+       51.5945838301
+      ],
+      [
+       0.212263983,
+       51.5943884035
+      ],
+      [
+       0.2123812698,
+       51.5940102123
+      ],
+      [
+       0.2124449864,
+       51.5935110455
+      ],
+      [
+       0.2124311315,
+       51.5934459406
+      ],
+      [
+       0.2121287281,
+       51.5932356648
+      ],
+      [
+       0.2110409478,
+       51.5933436078
+      ],
+      [
+       0.2101660914,
+       51.5933610211
+      ],
+      [
+       0.2075854905,
+       51.5937370589
+      ],
+      [
+       0.2053549437,
+       51.5941937395
+      ],
+      [
+       0.2004694664,
+       51.5953590646
+      ],
+      [
+       0.1992439177,
+       51.5955811475
+      ],
+      [
+       0.1985225821,
+       51.59568147
+      ],
+      [
+       0.1973381656,
+       51.5957781888
+      ],
+      [
+       0.196341393,
+       51.5957863757
+      ],
+      [
+       0.1950025433,
+       51.59570887
+      ],
+      [
+       0.1939300975,
+       51.5955589713
+      ],
+      [
+       0.183806492,
+       51.5933685845
+      ],
+      [
+       0.1829794199,
+       51.5931677789
+      ],
+      [
+       0.181386607,
+       51.5926247988
+      ],
+      [
+       0.1811786493,
+       51.5924711518
+      ],
+      [
+       0.1810990022,
+       51.5922764115
+      ]
+     ]
+    ]
+   ],
+   "crs": {
+    "type": "name",
+    "properties": {
+     "name": "EPSG:4326"
+    }
+   }
+  },
+  "streets": [
+   {
+    "$type": "Tfl.Api.Presentation.Entities.Street, Tfl.Api.Presentation.Entities",
+    "name": "[A12] EASTERN AVENUE EAST (RM2 ,RM3)",
+    "closure": "Closed",
+    "directions": "Westbound",
+    "segments": [
+     {
+      "$type": "Tfl.Api.Presentation.Entities.StreetSegment, Tfl.Api.Presentation.Entities",
+      "toid": "0",
+      "lineString": "[[0.21097,51.592896],[0.212337,51.592736]]",
+      "sourceSystemId": 0
+     },
+     {
+      "$type": "Tfl.Api.Presentation.Entities.StreetSegment, Tfl.Api.Presentation.Entities",
+      "toid": "0",
+      "lineString": "[[0.208463,51.593249],[0.208515,51.593243]]",
+      "sourceSystemId": 0
+     },
+     {
+      "$type": "Tfl.Api.Presentation.Entities.StreetSegment, Tfl.Api.Presentation.Entities",
+      "toid": "0",
+      "lineString": "[[0.208515,51.593243],[0.210077,51.593049]]",
+      "sourceSystemId": 0
+     },
+     {
+      "$type": "Tfl.Api.Presentation.Entities.StreetSegment, Tfl.Api.Presentation.Entities",
+      "toid": "0",
+      "lineString": "[[0.212337,51.592736],[0.213077,51.592515]]",
+      "sourceSystemId": 0
+     },
+     {
+      "$type": "Tfl.Api.Presentation.Entities.StreetSegment, Tfl.Api.Presentation.Entities",
+      "toid": "0",
+      "lineString": "[[0.213077,51.592515],[0.212872,51.592456]]",
+      "sourceSystemId": 0
+     },
+     {
+      "$type": "Tfl.Api.Presentation.Entities.StreetSegment, Tfl.Api.Presentation.Entities",
+      "toid": "0",
+      "lineString": "[[0.210077,51.593049],[0.21097,51.592896]]",
+      "sourceSystemId": 0
+     }
+    ],
+    "sourceSystemId": 206772,
+    "sourceSystemKey": "TIMS"
+   },
+   {
+    "$type": "Tfl.Api.Presentation.Entities.Street, Tfl.Api.Presentation.Entities",
+    "name": "[A127] SOUTHEND ARTERIAL ROAD (RM11 ,RM2 ,RM3)",
+    "closure": "Closed",
+    "directions": "Westbound",
+    "segments": [
+     {
+      "$type": "Tfl.Api.Presentation.Entities.StreetSegment, Tfl.Api.Presentation.Entities",
+      "toid": "0",
+      "lineString": "[[0.215428,51.591215],[0.215736,51.591061]]",
+      "sourceSystemId": 0
+     },
+     {
+      "$type": "Tfl.Api.Presentation.Entities.StreetSegment, Tfl.Api.Presentation.Entities",
+      "toid": "0",
+      "lineString": "[[0.215736,51.591061],[0.219852,51.589054]]",
+      "sourceSystemId": 0
+     },
+     {
+      "$type": "Tfl.Api.Presentation.Entities.StreetSegment, Tfl.Api.Presentation.Entities",
+      "toid": "0",
+      "lineString": "[[0.213226,51.59262],[0.213523,51.592396]]",
+      "sourceSystemId": 0
+     },
+     {
+      "$type": "Tfl.Api.Presentation.Entities.StreetSegment, Tfl.Api.Presentation.Entities",
+      "toid": "0",
+      "lineString": "[[0.213523,51.592396],[0.214871,51.591554]]",
+      "sourceSystemId": 0
+     },
+     {
+      "$type": "Tfl.Api.Presentation.Entities.StreetSegment, Tfl.Api.Presentation.Entities",
+      "toid": "0",
+      "lineString": "[[0.214871,51.591554],[0.215428,51.591215]]",
+      "sourceSystemId": 0
+     },
+     {
+      "$type": "Tfl.Api.Presentation.Entities.StreetSegment, Tfl.Api.Presentation.Entities",
+      "toid": "0",
+      "lineString": "[[0.219852,51.589054],[0.22036,51.588807]]",
+      "sourceSystemId": 0
+     },
+     {
+      "$type": "Tfl.Api.Presentation.Entities.StreetSegment, Tfl.Api.Presentation.Entities",
+      "toid": "0",
+      "lineString": "[[0.22036,51.588807],[0.22095,51.588569]]",
+      "sourceSystemId": 0
+     }
+    ],
+    "sourceSystemId": 206772,
+    "sourceSystemKey": "TIMS"
+   },
+   {
+    "$type": "Tfl.Api.Presentation.Entities.Street, Tfl.Api.Presentation.Entities",
+    "name": "[A127] SOUTHEND ARTERIAL ROAD (RM11 ,RM2 ,RM3)",
+    "closure": "Closed",
+    "directions": "Westbound",
+    "segments": [
+     {
+      "$type": "Tfl.Api.Presentation.Entities.StreetSegment, Tfl.Api.Presentation.Entities",
+      "toid": "0",
+      "lineString": "[[0.214939,51.591329],[0.213368,51.592276]]",
+      "sourceSystemId": 0
+     },
+     {
+      "$type": "Tfl.Api.Presentation.Entities.StreetSegment, Tfl.Api.Presentation.Entities",
+      "toid": "0",
+      "lineString": "[[0.217359,51.590114],[0.21668,51.590436]]",
+      "sourceSystemId": 0
+     },
+     {
+      "$type": "Tfl.Api.Presentation.Entities.StreetSegment, Tfl.Api.Presentation.Entities",
+      "toid": "0",
+      "lineString": "[[0.219169,51.589243],[0.218053,51.589776]]",
+      "sourceSystemId": 0
+     },
+     {
+      "$type": "Tfl.Api.Presentation.Entities.StreetSegment, Tfl.Api.Presentation.Entities",
+      "toid": "0",
+      "lineString": "[[0.223992,51.586904],[0.223767,51.587017]]",
+      "sourceSystemId": 0
+     },
+     {
+      "$type": "Tfl.Api.Presentation.Entities.StreetSegment, Tfl.Api.Presentation.Entities",
+      "toid": "0",
+      "lineString": "[[0.223598,51.587102],[0.223154,51.587323]]",
+      "sourceSystemId": 0
+     },
+     {
+      "$type": "Tfl.Api.Presentation.Entities.StreetSegment, Tfl.Api.Presentation.Entities",
+      "toid": "0",
+      "lineString": "[[0.213368,51.592276],[0.212548,51.592367]]",
+      "sourceSystemId": 0
+     },
+     {
+      "$type": "Tfl.Api.Presentation.Entities.StreetSegment, Tfl.Api.Presentation.Entities",
+      "toid": "0",
+      "lineString": "[[0.219776,51.588962],[0.219169,51.589243]]",
+      "sourceSystemId": 0
+     },
+     {
+      "$type": "Tfl.Api.Presentation.Entities.StreetSegment, Tfl.Api.Presentation.Entities",
+      "toid": "0",
+      "lineString": "[[0.218053,51.589776],[0.217359,51.590114]]",
+      "sourceSystemId": 0
+     },
+     {
+      "$type": "Tfl.Api.Presentation.Entities.StreetSegment, Tfl.Api.Presentation.Entities",
+      "toid": "0",
+      "lineString": "[[0.222327,51.587731],[0.219776,51.588962]]",
+      "sourceSystemId": 0
+     },
+     {
+      "$type": "Tfl.Api.Presentation.Entities.StreetSegment, Tfl.Api.Presentation.Entities",
+      "toid": "0",
+      "lineString": "[[0.223154,51.587323],[0.222327,51.587731]]",
+      "sourceSystemId": 0
+     },
+     {
+      "$type": "Tfl.Api.Presentation.Entities.StreetSegment, Tfl.Api.Presentation.Entities",
+      "toid": "0",
+      "lineString": "[[0.21668,51.590436],[0.215681,51.590941]]",
+      "sourceSystemId": 0
+     },
+     {
+      "$type": "Tfl.Api.Presentation.Entities.StreetSegment, Tfl.Api.Presentation.Entities",
+      "toid": "0",
+      "lineString": "[[0.215681,51.590941],[0.214939,51.591329]]",
+      "sourceSystemId": 0
+     },
+     {
+      "$type": "Tfl.Api.Presentation.Entities.StreetSegment, Tfl.Api.Presentation.Entities",
+      "toid": "0",
+      "lineString": "[[0.223767,51.587017],[0.223598,51.587102]]",
+      "sourceSystemId": 0
+     }
+    ],
+    "sourceSystemId": 206772,
+    "sourceSystemKey": "TIMS"
+   },
+   {
+    "$type": "Tfl.Api.Presentation.Entities.Street, Tfl.Api.Presentation.Entities",
+    "name": "[A12] EASTERN AVENUE EAST (RM1 ,RM2 ,RM3)",
+    "closure": "Closed",
+    "directions": "Eastbound",
+    "segments": [
+     {
+      "$type": "Tfl.Api.Presentation.Entities.StreetSegment, Tfl.Api.Presentation.Entities",
+      "toid": "0",
+      "lineString": "[[0.210078,51.592913],[0.208471,51.593129]]",
+      "sourceSystemId": 0
+     },
+     {
+      "$type": "Tfl.Api.Presentation.Entities.StreetSegment, Tfl.Api.Presentation.Entities",
+      "toid": "0",
+      "lineString": "[[0.199762,51.595029],[0.193838,51.595061]]",
+      "sourceSystemId": 0
+     },
+     {
+      "$type": "Tfl.Api.Presentation.Entities.StreetSegment, Tfl.Api.Presentation.Entities",
+      "toid": "0",
+      "lineString": "[[0.21097,51.592896],[0.210078,51.592913]]",
+      "sourceSystemId": 0
+     },
+     {
+      "$type": "Tfl.Api.Presentation.Entities.StreetSegment, Tfl.Api.Presentation.Entities",
+      "toid": "0",
+      "lineString": "[[0.21097,51.592896],[0.212337,51.592736]]",
+      "sourceSystemId": 0
+     },
+     {
+      "$type": "Tfl.Api.Presentation.Entities.StreetSegment, Tfl.Api.Presentation.Entities",
+      "toid": "0",
+      "lineString": "[[0.184413,51.593016],[0.182467,51.592495]]",
+      "sourceSystemId": 0
+     },
+     {
+      "$type": "Tfl.Api.Presentation.Entities.StreetSegment, Tfl.Api.Presentation.Entities",
+      "toid": "0",
+      "lineString": "[[0.187846,51.593763],[0.184413,51.593016]]",
+      "sourceSystemId": 0
+     },
+     {
+      "$type": "Tfl.Api.Presentation.Entities.StreetSegment, Tfl.Api.Presentation.Entities",
+      "toid": "0",
+      "lineString": "[[0.188177,51.593836],[0.187846,51.593763]]",
+      "sourceSystemId": 0
+     },
+     {
+      "$type": "Tfl.Api.Presentation.Entities.StreetSegment, Tfl.Api.Presentation.Entities",
+      "toid": "0",
+      "lineString": "[[0.213257,51.592655],[0.213226,51.59262]]",
+      "sourceSystemId": 0
+     },
+     {
+      "$type": "Tfl.Api.Presentation.Entities.StreetSegment, Tfl.Api.Presentation.Entities",
+      "toid": "0",
+      "lineString": "[[0.212337,51.592736],[0.213077,51.592515]]",
+      "sourceSystemId": 0
+     },
+     {
+      "$type": "Tfl.Api.Presentation.Entities.StreetSegment, Tfl.Api.Presentation.Entities",
+      "toid": "0",
+      "lineString": "[[0.213226,51.59262],[0.213077,51.592515]]",
+      "sourceSystemId": 0
+     },
+     {
+      "$type": "Tfl.Api.Presentation.Entities.StreetSegment, Tfl.Api.Presentation.Entities",
+      "toid": "0",
+      "lineString": "[[0.182467,51.592495],[0.18182,51.592266]]",
+      "sourceSystemId": 0
+     },
+     {
+      "$type": "Tfl.Api.Presentation.Entities.StreetSegment, Tfl.Api.Presentation.Entities",
+      "toid": "0",
+      "lineString": "[[0.193838,51.595061],[0.188177,51.593836]]",
+      "sourceSystemId": 0
+     },
+     {
+      "$type": "Tfl.Api.Presentation.Entities.StreetSegment, Tfl.Api.Presentation.Entities",
+      "toid": "0",
+      "lineString": "[[0.208471,51.593129],[0.199762,51.595029]]",
+      "sourceSystemId": 0
+     }
+    ],
+    "sourceSystemId": 206772,
+    "sourceSystemKey": "TIMS"
+   },
+   {
+    "$type": "Tfl.Api.Presentation.Entities.Street, Tfl.Api.Presentation.Entities",
+    "name": "[A12] COLCHESTER ROAD (RM3)",
+    "closure": "Closed",
+    "directions": "Westbound",
+    "segments": [
+     {
+      "$type": "Tfl.Api.Presentation.Entities.StreetSegment, Tfl.Api.Presentation.Entities",
+      "toid": "0",
+      "lineString": "[[0.213888,51.592877],[0.213257,51.592655]]",
+      "sourceSystemId": 0
+     },
+     {
+      "$type": "Tfl.Api.Presentation.Entities.StreetSegment, Tfl.Api.Presentation.Entities",
+      "toid": "0",
+      "lineString": "[[0.214202,51.592975],[0.216712,51.593794]]",
+      "sourceSystemId": 0
+     },
+     {
+      "$type": "Tfl.Api.Presentation.Entities.StreetSegment, Tfl.Api.Presentation.Entities",
+      "toid": "0",
+      "lineString": "[[0.216712,51.593794],[0.218346,51.594286]]",
+      "sourceSystemId": 0
+     },
+     {
+      "$type": "Tfl.Api.Presentation.Entities.StreetSegment, Tfl.Api.Presentation.Entities",
+      "toid": "0",
+      "lineString": "[[0.214202,51.592975],[0.213888,51.592877]]",
+      "sourceSystemId": 0
+     }
+    ],
+    "sourceSystemId": 206772,
+    "sourceSystemKey": "TIMS"
+   },
+   {
+    "$type": "Tfl.Api.Presentation.Entities.Street, Tfl.Api.Presentation.Entities",
+    "name": "[A118] MAIN ROAD (RM2)",
+    "closure": "Closed",
+    "directions": "Eastbound",
+    "segments": [
+     {
+      "$type": "Tfl.Api.Presentation.Entities.StreetSegment, Tfl.Api.Presentation.Entities",
+      "toid": "0",
+      "lineString": "[[0.210422,51.591319],[0.211007,51.591682]]",
+      "sourceSystemId": 0
+     },
+     {
+      "$type": "Tfl.Api.Presentation.Entities.StreetSegment, Tfl.Api.Presentation.Entities",
+      "toid": "0",
+      "lineString": "[[0.209984,51.591027],[0.210084,51.591094]]",
+      "sourceSystemId": 0
+     },
+     {
+      "$type": "Tfl.Api.Presentation.Entities.StreetSegment, Tfl.Api.Presentation.Entities",
+      "toid": "0",
+      "lineString": "[[0.210234,51.591193],[0.210422,51.591319]]",
+      "sourceSystemId": 0
+     },
+     {
+      "$type": "Tfl.Api.Presentation.Entities.StreetSegment, Tfl.Api.Presentation.Entities",
+      "toid": "0",
+      "lineString": "[[0.212548,51.592367],[0.212154,51.592253]]",
+      "sourceSystemId": 0
+     },
+     {
+      "$type": "Tfl.Api.Presentation.Entities.StreetSegment, Tfl.Api.Presentation.Entities",
+      "toid": "0",
+      "lineString": "[[0.210084,51.591094],[0.210234,51.591193]]",
+      "sourceSystemId": 0
+     },
+     {
+      "$type": "Tfl.Api.Presentation.Entities.StreetSegment, Tfl.Api.Presentation.Entities",
+      "toid": "0",
+      "lineString": "[[0.212711,51.592446],[0.212548,51.592367]]",
+      "sourceSystemId": 0
+     },
+     {
+      "$type": "Tfl.Api.Presentation.Entities.StreetSegment, Tfl.Api.Presentation.Entities",
+      "toid": "0",
+      "lineString": "[[0.211007,51.591682],[0.212154,51.592253]]",
+      "sourceSystemId": 0
+     }
+    ],
+    "sourceSystemId": 206772,
+    "sourceSystemKey": "TIMS"
+   },
+   {
+    "$type": "Tfl.Api.Presentation.Entities.Street, Tfl.Api.Presentation.Entities",
+    "name": "STRAIGHT ROAD (RM2 ,RM3)",
+    "closure": "Closed",
+    "directions": "Southbound",
+    "segments": [
+     {
+      "$type": "Tfl.Api.Presentation.Entities.StreetSegment, Tfl.Api.Presentation.Entities",
+      "toid": "0",
+      "lineString": "[[0.213165,51.593592],[0.213165,51.593619]]",
+      "sourceSystemId": 0
+     },
+     {
+      "$type": "Tfl.Api.Presentation.Entities.StreetSegment, Tfl.Api.Presentation.Entities",
+      "toid": "0",
+      "lineString": "[[0.213123,51.593286],[0.213163,51.593463]]",
+      "sourceSystemId": 0
+     },
+     {
+      "$type": "Tfl.Api.Presentation.Entities.StreetSegment, Tfl.Api.Presentation.Entities",
+      "toid": "0",
+      "lineString": "[[0.212679,51.592945],[0.213111,51.593233]]",
+      "sourceSystemId": 0
+     },
+     {
+      "$type": "Tfl.Api.Presentation.Entities.StreetSegment, Tfl.Api.Presentation.Entities",
+      "toid": "0",
+      "lineString": "[[0.213147,51.59379],[0.213023,51.594306]]",
+      "sourceSystemId": 0
+     },
+     {
+      "$type": "Tfl.Api.Presentation.Entities.StreetSegment, Tfl.Api.Presentation.Entities",
+      "toid": "0",
+      "lineString": "[[0.213165,51.593619],[0.213147,51.59379]]",
+      "sourceSystemId": 0
+     },
+     {
+      "$type": "Tfl.Api.Presentation.Entities.StreetSegment, Tfl.Api.Presentation.Entities",
+      "toid": "0",
+      "lineString": "[[0.213165,51.593592],[0.213163,51.593463]]",
+      "sourceSystemId": 0
+     },
+     {
+      "$type": "Tfl.Api.Presentation.Entities.StreetSegment, Tfl.Api.Presentation.Entities",
+      "toid": "0",
+      "lineString": "[[0.213023,51.594306],[0.212982,51.594432]]",
+      "sourceSystemId": 0
+     },
+     {
+      "$type": "Tfl.Api.Presentation.Entities.StreetSegment, Tfl.Api.Presentation.Entities",
+      "toid": "0",
+      "lineString": "[[0.213111,51.593233],[0.213123,51.593286]]",
+      "sourceSystemId": 0
+     }
+    ],
+    "sourceSystemId": 206772,
+    "sourceSystemKey": "TIMS"
+   }
+  ],
+  "isProvisional": false,
+  "hasClosures": false,
+  "roadDisruptionLines": [],
+  "roadDisruptionImpactAreas": [],
+  "recurringSchedules": []
+ },
+ {
+  "$type": "Tfl.Api.Presentation.Entities.RoadDisruption, Tfl.Api.Presentation.Entities",
+  "id": "TIMS-233205",
+  "url": "/Road/All/Disruption/TIMS-233205",
+  "point": "[-0.073011,51.566655]",
+  "severity": "Minimal",
+  "ordinal": 13,
+  "category": "Works",
+  "subCategory": "TfL works",
+  "comments": "[A10] Stamford Hill (Both directions) between Reizel Close and Windus Road - Temporary traffic signals in use to facilitate junction improvement works.",
+  "currentUpdate": "Delays are possible.",
+  "currentUpdateDateTime": "2026-09-18T23:05:18Z",
+  "corridorIds": [
+   "a10"
+  ],
+  "startDateTime": "2026-09-07T07:00:00Z",
+  "endDateTime": "2026-09-25T17:00:00Z",
+  "lastModifiedTime": "2026-09-18T23:05:18Z",
+  "levelOfInterest": "Medium",
+  "location": "[A10] STAMFORD HILL (N16 ) (Hackney)",
+  "status": "Active Long Term",
+  "geography": {
+   "type": "Point",
+   "coordinates": [
+    -0.073011,
+    51.566655
+   ],
+   "crs": {
+    "type": "name",
+    "properties": {
+     "name": "EPSG:4326"
+    }
+   }
+  },
+  "isProvisional": false,
+  "hasClosures": false,
+  "roadDisruptionLines": [],
+  "roadDisruptionImpactAreas": [],
+  "recurringSchedules": []
+ },
+ {
+  "$type": "Tfl.Api.Presentation.Entities.RoadDisruption, Tfl.Api.Presentation.Entities",
+  "id": "TIMS-234853",
+  "url": "/Road/All/Disruption/TIMS-234853",
+  "point": "[0.248079,51.603536]",
+  "severity": "Minimal",
+  "ordinal": 14,
+  "category": "Works",
+  "subCategory": "Utility works",
+  "comments": "[A12] Colchester Road (Eastbound) at the junction of Woodstock Avenue - Lane one (of two) closed to facilitate Essex & Suffolk Water works.",
+  "currentUpdate": "Delays are possible.",
+  "currentUpdateDateTime": "2026-09-18T22:49:45Z",
+  "corridorIds": [
+   "a12"
+  ],
+  "startDateTime": "2026-09-14T08:36:00Z",
+  "endDateTime": "2026-09-19T22:59:00Z",
+  "lastModifiedTime": "2026-09-18T22:52:22Z",
+  "levelOfInterest": "Medium",
+  "location": "[A12] COLCHESTER ROAD (RM3 ) (Havering)",
+  "status": "Active Long Term",
+  "geography": {
+   "type": "Point",
+   "coordinates": [
+    0.248079,
+    51.603536
+   ],
+   "crs": {
+    "type": "name",
+    "properties": {
+     "name": "EPSG:4326"
+    }
+   }
+  },
+  "isProvisional": false,
+  "hasClosures": false,
+  "roadDisruptionLines": [],
+  "roadDisruptionImpactAreas": [],
+  "recurringSchedules": []
+ },
+ {
+  "$type": "Tfl.Api.Presentation.Entities.RoadDisruption, Tfl.Api.Presentation.Entities",
+  "id": "TIMS-233221",
+  "url": "/Road/All/Disruption/TIMS-233221",
+  "point": "[0.054973,51.47111]",
+  "severity": "Moderate",
+  "ordinal": 4,
+  "category": "Works",
+  "subCategory": "Utility works",
+  "comments": "[A205] Academy Road (All directions) at the junction of [A207] Shooters Hill Road - There are temporary signals in place to facilitate SGN works. ",
+  "currentUpdate": "Traffic is flowing well.",
+  "currentUpdateDateTime": "2026-09-19T11:03:59Z",
+  "corridorIds": [
+   "a205"
+  ],
+  "startDateTime": "2026-08-11T07:53:00Z",
+  "endDateTime": "2026-09-25T18:00:00Z",
+  "lastModifiedTime": "2026-09-19T11:04:05Z",
+  "levelOfInterest": "High",
+  "location": "[A205] ACADEMY ROAD (SE18 ) (Greenwich)",
+  "status": "Active",
+  "geography": {
+   "type": "Point",
+   "coordinates": [
+    0.054973,
+    51.47111
+   ],
+   "crs": {
+    "type": "name",
+    "properties": {
+     "name": "EPSG:4326"
+    }
+   }
+  },
+  "isProvisional": false,
+  "hasClosures": false,
+  "roadDisruptionLines": [],
+  "roadDisruptionImpactAreas": [],
+  "recurringSchedules": []
+ },
+ {
+  "$type": "Tfl.Api.Presentation.Entities.RoadDisruption, Tfl.Api.Presentation.Entities",
+  "id": "TEST-NO-IMPACT",
+  "url": "/Road/All/Disruption/TIMS-233205",
+  "point": "[-0.073011,51.566655]",
+  "severity": "No impact",
+  "ordinal": 13,
+  "category": "Works",
+  "subCategory": "TfL works",
+  "comments": "[A10] Stamford Hill (Both directions) between Reizel Close and Windus Road - Temporary traffic signals in use to facilitate junction improvement works.",
+  "currentUpdate": "Delays are possible.",
+  "currentUpdateDateTime": "2026-09-18T23:05:18Z",
+  "corridorIds": [
+   "a10"
+  ],
+  "startDateTime": "2026-09-07T07:00:00Z",
+  "endDateTime": "2026-09-25T17:00:00Z",
+  "lastModifiedTime": "2026-09-18T23:05:18Z",
+  "levelOfInterest": "Medium",
+  "location": "[A10] STAMFORD HILL (N16 ) (Hackney)",
+  "status": "Active Long Term",
+  "geography": {
+   "type": "Point",
+   "coordinates": [
+    -0.073011,
+    51.566655
+   ],
+   "crs": {
+    "type": "name",
+    "properties": {
+     "name": "EPSG:4326"
+    }
+   }
+  },
+  "isProvisional": false,
+  "hasClosures": false,
+  "roadDisruptionLines": [],
+  "roadDisruptionImpactAreas": [],
+  "recurringSchedules": []
+ }
+]
