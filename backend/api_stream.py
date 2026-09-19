@@ -8,7 +8,7 @@ idle stream holds no thread.
 Message types (the `event:` field); every `data:` field is one line of JSON:
   hello          {"server_time", "mark"}     first message of every connection
   event_upsert   GeoJSON Feature, same shape as the items of /api/events
-  event_end      {"id"}                      event ended, or its risk is below MIN_EVENT_RISK
+  event_end      {"id"}                      the event's risk is below MIN_EVENT_RISK
   cells_changed  {"updated_at"}              cell_scores were rewritten
   agent_run      {"id", "source_id", "finished_at", "fetched", "inserted", "ended", "error"}
 Every message carries `id: <mark>`, the high-water mark timestamp. A client resumes
@@ -88,7 +88,8 @@ def change_frames(changes: dict[str, Any], now: datetime, sent: Sent, mark: str)
             continue
         sent.events[event_id] = updated_at
         feature = event_feature(ev, now)
-        if ev.ended_at is not None or feature["properties"]["risk"] < MIN_EVENT_RISK:
+        # An ended event keeps a residual risk and stays on the map until it is below the threshold
+        if feature["properties"]["risk"] < MIN_EVENT_RISK:
             frames.append(sse_frame("event_end", {"id": event_id}, mark))
         else:
             frames.append(sse_frame("event_upsert", feature, mark))
