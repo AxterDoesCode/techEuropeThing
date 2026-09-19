@@ -12,7 +12,6 @@ from .scoring import FINE_RES, compute_cell_scores
 from .sources.base import StructuredSource
 from .sources.ea_floods import EaFloodsSource
 from .sources.met_news import MetNewsSource
-from .sources.reddit import RedditSource
 from .sources.rss import BbcLondonSource, EveningStandardSource, MyLondonSource
 from .sources.tfl_road import TflRoadSource
 from .sources.tfl_transit import TflTransitSource
@@ -27,7 +26,6 @@ SOURCES: dict[str, StructuredSource] = {
         BbcLondonSource(),
         EveningStandardSource(),
         MyLondonSource(),
-        RedditSource(),
     ]
 }
 
