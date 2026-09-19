@@ -70,7 +70,7 @@ def test_changing_the_extractor_reprocesses_items(repo, monkeypatch):
     feed = Feed([raw("a", STABBING)])
     run_poll(feed, repo)
     assert repo.pending_extraction("feed", ["a"], "rules") == []
-    assert repo.pending_extraction("feed", ["a"], "google-gla:gemini-2.5-flash") == ["a"]
+    assert repo.pending_extraction("feed", ["a"], "google:gemini-3.8-flash") == ["a"]
 
 
 def test_map_items_replaces_the_sequential_loop(repo):
@@ -116,7 +116,7 @@ def test_news_feeds_need_an_llm_and_social_confidence_exists(monkeypatch):
     assert {"bbc_london", "standard_london", "mylondon"} <= set(SOURCES)
     assert not any(is_pollable(s) for s in ("bbc_london", "standard_london", "mylondon"))
     assert is_pollable("met_news")
-    monkeypatch.setenv("LLM_MODEL", "google-gla:gemini-2.5-flash")
+    monkeypatch.setenv("LLM_MODEL", "google:gemini-3.8-flash")
     assert all(is_pollable(s) for s in ("bbc_london", "standard_london", "mylondon"))
     assert 0 < SOURCE_TYPE_CONFIDENCE["social"] < SOURCE_TYPE_CONFIDENCE["manual"]
 

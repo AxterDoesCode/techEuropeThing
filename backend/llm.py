@@ -6,7 +6,7 @@ coordinates or confidence: `to_events` derives those from the geocode results
 recorded during the same run.
 
 The model is selected with the LLM_MODEL environment variable
-(e.g. `anthropic:claude-haiku-4-5`). The Agent is built on first use, so this
+(the project uses `google:gemini-3.8-flash`, with `GOOGLE_API_KEY`). The Agent is built on first use, so this
 module can be imported without a model or an API key.
 """
 
