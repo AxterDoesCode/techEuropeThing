@@ -9,7 +9,7 @@ import type { PickingInfo } from '@deck.gl/core'
 import type { CrimePoints, CrimeRow, EventFeature, FlyTarget, LngLat, RouteEndpoint, RouteResult } from '../types'
 import type { Theme } from '../theme'
 import { CATEGORY_COLOR, scoreColor } from './colors'
-import { buildCrimeIndex, summariseCrime } from './crimeIndex'
+import { buildCrimeIndex, CRIME_QUERY_RADIUS_M, summariseCrime } from './crimeIndex'
 import { EventDetail } from '../panels/EventDetail'
 import { CrimeDetail } from '../panels/CrimeDetail'
 
@@ -299,9 +299,56 @@ export function RiskMap({
     mapRef,
     crimeAt && showCrime ? `${crimeAt.lng},${crimeAt.lat}` : null,
     crimeAt,
-    6,
+    crimePopupOffset,
     () => handlers.current.onCrimeQuery(null),
   )
+  // Area covered by the open crime summary: a circle of CRIME_QUERY_RADIUS_M on the
+  // ground around the queried position, and a dot at the position. The white line
+  // is drawn over a wider dark line so it is visible on the dark and the light
+  // basemap and over the heatmap. Not pickable: clicks inside the circle reach the
+  // map. No depth test: extruded buildings do not hide it.
+  const crimeRingAt = showCrime ? crimeAt : null
+  const crimeQueryLayers = useMemo(() => {
+    const data = crimeRingAt ? [crimeRingAt] : []
+    const ring = {
+      data,
+      getPosition: (p: LngLat): [number, number] => [p.lng, p.lat],
+      getRadius: CRIME_QUERY_RADIUS_M,
+      radiusUnits: 'meters' as const,
+      stroked: true,
+      lineWidthUnits: 'pixels' as const,
+      pickable: false,
+      parameters: { depthCompare: 'always' as const },
+    }
+    return [
+      new ScatterplotLayer<LngLat>({
+        ...ring,
+        id: 'crime-query-ring-outline',
+        filled: false,
+        getLineColor: [16, 19, 26, 200],
+        getLineWidth: 5,
+      }),
+      new ScatterplotLayer<LngLat>({
+        ...ring,
+        id: 'crime-query-ring',
+        filled: true,
+        getFillColor: [255, 255, 255, 26],
+        getLineColor: [255, 255, 255, 255],
+        getLineWidth: 2,
+      }),
+      new ScatterplotLayer<LngLat>({
+        ...ring,
+        id: 'crime-query-centre',
+        getRadius: 3,
+        radiusUnits: 'pixels',
+        filled: true,
+        getFillColor: [255, 255, 255, 255],
+        getLineColor: [16, 19, 26, 230],
+        getLineWidth: 1.5,
+      }),
+    ]
+  }, [crimeRingAt])
+
   const crimeAvailable = showCrime && crimeIndex !== null && projection === 'mercator'
   useEffect(() => {
     crimeClickable.current = crimeAvailable
@@ -354,7 +401,14 @@ export function RiskMap({
         pickable: true,
         updateTriggers: { getLineColor: selectedId },
       }),
-      // Clickable marker for every event, tinted by category
+    ]
+  }, [events, crime, showCrime, crimeOpacity, heatRadius, selectedId, projection])
+
+  // Clickable marker for every event, tinted by category. A separate list because
+  // the crime query circle is drawn between the layers above and the markers.
+  const markerLayers = useMemo(() => {
+    const isSelected = (f: EventFeature) => f.properties.id === selectedId
+    return [
       new ScatterplotLayer<EventFeature>({
         id: 'event-markers',
         data: events,
@@ -372,11 +426,11 @@ export function RiskMap({
         updateTriggers: { getRadius: selectedId, getLineWidth: selectedId },
       }),
     ]
-  }, [events, crime, showCrime, crimeOpacity, heatRadius, selectedId, projection])
+  }, [events, selectedId])
 
   useEffect(() => {
     overlayRef.current?.setProps({
-      layers: [...layers, ...routeLayers],
+      layers: [...layers, ...crimeQueryLayers, ...markerLayers, ...routeLayers],
       onClick: (info: PickingInfo) => {
         const feature = info.object as EventFeature | undefined
         if (pickingRef.current && info.coordinate) {
@@ -392,7 +446,7 @@ export function RiskMap({
       getTooltip: (info: PickingInfo) => (info.object as EventFeature | undefined)?.properties?.title ?? null,
       getCursor: ({ isHovering }: { isHovering: boolean }) => (isHovering ? 'pointer' : 'crosshair'),
     })
-  }, [layers, routeLayers])
+  }, [layers, crimeQueryLayers, markerLayers, routeLayers])
 
   return (
     <>
@@ -411,11 +465,21 @@ function fitPadding(map: maplibregl.Map, sidebarOpen: boolean) {
 
 // MapLibre popup whose content is rendered by React through a portal into the
 // returned node. The popup exists while `key` is not null and is rebuilt when it changes.
+// The crime popup is placed outside the query circle so it does not cover it:
+// the offset is the circle's radius on screen at the current zoom, plus a gap.
+// 78271.517 m per pixel at zoom 0 on the equator with 512 px tiles.
+function crimePopupOffset(map: maplibregl.Map, at: LngLat): number {
+  const metersPerPixel = (78271.517 * Math.cos((at.lat * Math.PI) / 180)) / 2 ** map.getZoom()
+  return Math.min(320, CRIME_QUERY_RADIUS_M / metersPerPixel) + 8
+}
+
+type PopupOffset = number | ((map: maplibregl.Map, at: LngLat) => number)
+
 function usePopup(
   mapRef: RefObject<maplibregl.Map | null>,
   key: string | null,
   at: LngLat | null,
-  offset: number,
+  offset: PopupOffset,
   onUserClose: () => void,
 ): HTMLDivElement | null {
   const [node, setNode] = useState<HTMLDivElement | null>(null)
@@ -429,7 +493,8 @@ function usePopup(
     if (!map || key === null || !pos) return
     const content = document.createElement('div')
     // closeOnClick is off: the click that opens a popup would also close it
-    const popup = new maplibregl.Popup({ offset, maxWidth: '360px', closeOnClick: false, className: 'event-popup' })
+    const offsetNow = () => (typeof offset === 'function' ? offset(map, pos) : offset)
+    const popup = new maplibregl.Popup({ offset: offsetNow(), maxWidth: '360px', closeOnClick: false, className: 'event-popup' })
       .setLngLat([pos.lng, pos.lat])
       .setDOMContent(content)
       .addTo(map)
@@ -443,9 +508,13 @@ function usePopup(
     // again when the size changes; otherwise a tall popup extends past the window edge.
     const resize = new ResizeObserver(() => popup.setLngLat(popup.getLngLat()))
     resize.observe(content)
+    // An offset that depends on the zoom is recomputed while zooming
+    const onZoom = () => popup.setOffset(offsetNow())
+    if (typeof offset === 'function') map.on('zoom', onZoom)
     setNode(content)
     return () => {
       disposed = true
+      map.off('zoom', onZoom)
       resize.disconnect()
       popup.remove()
       setNode(null)
