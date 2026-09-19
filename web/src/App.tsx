@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ALERTS_REFRESH_MS, API_BASE, CRIME_REFRESH_MS, fetchAgents, fetchAlerts, fetchCrimePoints, POLL_INTERVAL_MS } from './api'
 import { usePolling } from './usePolling'
 import { useLiveEvents } from './useLiveEvents'
@@ -10,10 +10,14 @@ import { LayerPanel } from './panels/LayerPanel'
 import { RoutePanel } from './panels/RoutePanel'
 import { SearchBox } from './panels/SearchBox'
 import { AlertBanner } from './panels/AlertBanner'
+import { ChatPanel } from './panels/ChatPanel'
 import { useRouteState } from './route'
+import { useAssistant } from './assistant'
+import type { AssistantEvent, MapContext } from './chat'
+import { useLetterShortcut } from './shortcuts'
 import { formatCoord } from './format'
 import { useTheme } from './theme'
-import { useLayerSettings, type LayerSettings } from './layerSettings'
+import { isNarrowWindow, NARROW_WINDOW_PX, useLayerSettings, type LayerSettings } from './layerSettings'
 import { isEventShown, listSources } from './eventFilter'
 import type { PlaceResult } from './search'
 import type { EventFeature, FlyTarget, LngLat } from './types'
@@ -41,6 +45,18 @@ export default function App() {
   const [fields, setFields] = useState<CoordinateFields>({ lng: '', lat: '' })
   const [theme, toggleTheme] = useTheme()
   const routing = useRouteState()
+  // Map view for the chat request, read from the map when a question is sent
+  const mapContextRef = useRef<(() => MapContext | null) | null>(null)
+  const selectedIdRef = useRef(selectedId)
+  useEffect(() => {
+    selectedIdRef.current = selectedId
+  })
+  const getMapContext = useCallback((): MapContext | null => {
+    const view = mapContextRef.current?.()
+    if (!view) return null
+    return selectedIdRef.current ? { ...view, selected_event_id: selectedIdRef.current } : view
+  }, [])
+  const assistant = useAssistant(getMapContext)
 
   // Source and minimum risk filters apply to the map and the feed alike
   const allEvents = events.events
@@ -52,10 +68,17 @@ export default function App() {
   const sources = useMemo(() => listSources(allEvents, disabledSources), [allEvents, disabledSources])
   const error = events.error ?? agents.error ?? crime.error
 
-  const selectEvent = useCallback((id: string | null) => {
-    setSelectedId(id)
-    if (id !== null) setCrimeAt(null)
-  }, [])
+  // The full event popup replaces the compact card of the same event
+  const closeCard = assistant.closeCard
+  const selectEvent = useCallback(
+    (id: string | null) => {
+      setSelectedId(id)
+      if (id === null) return
+      setCrimeAt(null)
+      closeCard(id)
+    },
+    [closeCard],
+  )
   const queryCrime = useCallback((pos: LngLat | null) => {
     setCrimeAt(pos)
     if (pos !== null) setSelectedId(null)
@@ -85,7 +108,12 @@ export default function App() {
     (place: PlaceResult) => flyTo(place.bbox ? { bbox: place.bbox } : { lng: place.lng, lat: place.lat, zoom: 15 }),
     [flyTo],
   )
-  const resetView = useCallback(() => setTarget({ home: true, nonce: Date.now() }), [])
+  // Also removes everything the chatbot drew; the conversation stays
+  const clearAssistantLayer = assistant.clearLayer
+  const resetView = useCallback(() => {
+    clearAssistantLayer()
+    setTarget({ home: true, nonce: Date.now() })
+  }, [clearAssistantLayer])
 
   const selectFromFeed = useCallback(
     (e: EventFeature) => {
@@ -93,6 +121,16 @@ export default function App() {
       flyTo({ lng: e.properties.lng, lat: e.properties.lat, zoom: 15 })
     },
     [selectEvent, flyTo],
+  )
+  // An event listed under an older answer belongs to that answer's layer: draw it
+  // again (without moving the camera to the whole layer) so the event is on the map
+  const { showOnMap, layer: assistantLayer } = assistant
+  const selectFromChat = useCallback(
+    (entryId: number, e: AssistantEvent) => {
+      if (assistantLayer.entryId !== entryId) showOnMap(entryId, false)
+      selectFromFeed(e)
+    },
+    [assistantLayer.entryId, showOnMap, selectFromFeed],
   )
   const copyToFields = useCallback(
     (pos: LngLat) => setFields({ lng: formatCoord(pos.lng), lat: formatCoord(pos.lat) }),
@@ -111,27 +149,30 @@ export default function App() {
     [routing.origin, routing.destination],
   )
   const sidebarOpen = !settings.sidebarCollapsed
+  const chatOpen = !settings.chatCollapsed
+  // On a narrow window only one of the two side panels is open: opening one collapses the other
   const toggleSidebar = useCallback(
-    () => changeSettings({ sidebarCollapsed: sidebarOpen }),
+    () => changeSettings(sidebarOpen ? { sidebarCollapsed: true } : { sidebarCollapsed: false, ...(isNarrowWindow() && { chatCollapsed: true }) }),
     [changeSettings, sidebarOpen],
   )
-  // The B key toggles the sidebar, except while text is being entered, a modifier
-  // key is held, or the list of the search box is open
+  const toggleChat = useCallback(
+    () => changeSettings(chatOpen ? { chatCollapsed: true } : { chatCollapsed: false, ...(isNarrowWindow() && { sidebarCollapsed: true }) }),
+    [changeSettings, chatOpen],
+  )
+  // A window resized below the limit with both panels open keeps the sidebar
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key.toLowerCase() !== 'b' || e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return
-      if (e.isComposing || e.repeat || e.defaultPrevented) return
-      const el = e.target instanceof HTMLElement ? e.target : null
-      if (el && (el.isContentEditable || el.closest('input, textarea, select'))) return
-      if (document.querySelector('[role="combobox"][aria-expanded="true"]')) return
-      toggleSidebar()
+    const narrow = window.matchMedia(`(max-width: ${NARROW_WINDOW_PX - 1}px)`)
+    const onChange = () => {
+      if (narrow.matches && sidebarOpen && chatOpen) changeSettings({ chatCollapsed: true })
     }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [toggleSidebar])
+    narrow.addEventListener('change', onChange)
+    return () => narrow.removeEventListener('change', onChange)
+  }, [sidebarOpen, chatOpen, changeSettings])
+  useLetterShortcut('b', toggleSidebar)
+  useLetterShortcut('c', toggleChat)
 
   return (
-    <div className="app">
+    <div className={`app ${chatOpen ? 'chat-open' : ''}`}>
       <RiskMap
         events={features}
         crime={crime.data}
@@ -149,6 +190,10 @@ export default function App() {
         route={routing.route}
         routeEndpoints={routeEndpoints}
         picking={routing.picking !== null}
+        assistant={assistant.layer}
+        chatOpen={chatOpen}
+        onCloseCard={assistant.closeCard}
+        mapContextRef={mapContextRef}
       />
       <AlertBanner alerts={alerts.data} sidebarOpen={sidebarOpen} />
       {/* Kept mounted while collapsed so the panels keep their state */}
@@ -205,6 +250,21 @@ export default function App() {
         title={sidebarOpen ? 'Hide sidebar (B)' : 'Show sidebar (B)'}
       >
         <span aria-hidden="true">{sidebarOpen ? '‹' : '›'}</span>
+      </button>
+      {/* Kept mounted while collapsed so the conversation, the draft and a pending request are kept */}
+      <aside className="right" id="chat-panel" hidden={!chatOpen}>
+        <ChatPanel assistant={assistant} selectedId={selectedId} onSelectEvent={selectFromChat} />
+      </aside>
+      <button
+        type="button"
+        className={`sidebar-tab chat-tab ${chatOpen ? '' : 'collapsed'}`}
+        onClick={toggleChat}
+        aria-label={chatOpen ? 'Hide assistant' : 'Show assistant'}
+        aria-expanded={chatOpen}
+        aria-controls="chat-panel"
+        title={chatOpen ? 'Hide assistant (C)' : 'Show assistant (C)'}
+      >
+        <span aria-hidden="true">{chatOpen ? '›' : '‹'}</span>
       </button>
       {!sidebarOpen && (
         <div className="panel view-controls collapsed-controls">

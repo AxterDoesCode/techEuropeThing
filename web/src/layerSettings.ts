@@ -41,6 +41,7 @@ function validate(raw: unknown): LayerSettings {
   if (typeof raw !== 'object' || raw === null) return d
   const r = raw as Record<string, unknown>
   const bool = (v: unknown, fallback: boolean) => (typeof v === 'boolean' ? v : fallback)
+  const sidebarCollapsed = bool(r.sidebarCollapsed, d.sidebarCollapsed)
   return {
     showCrime: bool(r.showCrime, d.showCrime),
     crimeOpacity: inRange(r.crimeOpacity, 0, 1) ? r.crimeOpacity : d.crimeOpacity,
@@ -50,9 +51,10 @@ function validate(raw: unknown): LayerSettings {
         ? (r.disabledSources as string[])
         : d.disabledSources,
     layersCollapsed: bool(r.layersCollapsed, d.layersCollapsed),
-    sidebarCollapsed: bool(r.sidebarCollapsed, d.sidebarCollapsed),
-    // stored settings from before the chat panel have no value: open on a wide window
-    chatCollapsed: bool(r.chatCollapsed, isNarrowWindow()) || (isNarrowWindow() && !bool(r.sidebarCollapsed, d.sidebarCollapsed)),
+    sidebarCollapsed,
+    // Settings stored before the chat panel existed have no value: open on a wide
+    // window. On a narrow window the chat panel is not opened next to an open sidebar.
+    chatCollapsed: bool(r.chatCollapsed, isNarrowWindow()) || (isNarrowWindow() && !sidebarCollapsed),
   }
 }
 

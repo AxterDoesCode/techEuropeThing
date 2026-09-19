@@ -12,6 +12,11 @@ import { CATEGORY_COLOR, scoreColor } from './colors'
 import { buildCrimeIndex, CRIME_QUERY_RADIUS_M, summariseCrime } from './crimeIndex'
 import { EventDetail } from '../panels/EventDetail'
 import { CrimeDetail } from '../panels/CrimeDetail'
+import { EventCard } from '../panels/EventCard'
+import type { AssistantLayer } from '../assistant'
+import type { AssistantEvent, ChatArea, MapContext } from '../chat'
+import { bboxAround, bboxOf, clampFitBounds } from '../geo'
+import { usePopup, usePopups, type PopupOptions } from './usePopups'
 
 const STYLE_URL: Record<Theme, string> = {
   dark: 'https://tiles.openfreemap.org/styles/dark',
@@ -23,6 +28,8 @@ const LONDON: [number, number] = [-0.1, 51.505]
 const HOME_VIEW = { center: LONDON, zoom: 11.5, pitch: 50, bearing: -15 }
 // Width covered by the open sidebar, used as left padding when fitting bounds
 const SIDEBAR_PADDING = 400
+// Width covered by the open chat panel (12px + 360px + the toggle), used as right padding
+const CHAT_PADDING = 400
 // Globe when zoomed out, mercator from this zoom up. deck.gl's HeatmapLayer does
 // not render under the globe projection, and deck.gl accepts only the plain
 // 'globe' and 'mercator' projection types (not MapLibre's interpolated form).
@@ -116,6 +123,13 @@ interface Props {
   route?: RouteResult | null
   routeEndpoints?: Partial<Record<RouteEndpoint, LngLat | null>>
   picking?: boolean
+  /** what the chatbot drew: route, area, events and the ids shown as compact cards */
+  assistant: AssistantLayer
+  /** the chat panel covers the right part of the map */
+  chatOpen: boolean
+  onCloseCard: (eventId: string) => void
+  /** set to a function that returns the current view; read by the chat when a question is sent */
+  mapContextRef?: RefObject<(() => MapContext | null) | null>
 }
 
 interface RoutePath {
@@ -133,25 +147,91 @@ const ENDPOINT_COLOR: Record<RouteEndpoint, [number, number, number, number]> = 
   origin: [38, 166, 91, 255],
   destination: [32, 36, 46, 255],
 }
+type RGBA = [number, number, number, number]
+// Everything the chatbot draws uses the accent colour of the theme (--accent in index.css)
+const ASSISTANT_RGB: Record<Theme, [number, number, number]> = { dark: [240, 200, 80], light: [181, 122, 0] }
+const ASSISTANT_FAST_COLOR: RGBA = [132, 140, 154, 150]
+
+interface RouteStyle {
+  color: Record<RoutePath['kind'], RGBA>
+  width: Record<RoutePath['kind'], number>
+  endpointColor: Record<RouteEndpoint, RGBA>
+}
+const MANUAL_ROUTE_STYLE: RouteStyle = { color: ROUTE_COLOR, width: { fast: 7, safe: 5 }, endpointColor: ENDPOINT_COLOR }
+
+// Path and endpoint layers of one route source. The route of the Walking route
+// panel and the route of the chatbot are separate sources with separate layer ids.
+function buildRouteLayers(idPrefix: string, route: RouteResult | null, markers: RouteMarker[], style: RouteStyle) {
+  // fast first, so the safe path is drawn over it where they overlap
+  const paths: RoutePath[] = route
+    ? [
+        { kind: 'fast', path: route.fast.geometry.coordinates },
+        { kind: 'safe', path: route.safe.geometry.coordinates },
+      ]
+    : []
+  return {
+    paths: new PathLayer<RoutePath>({
+      id: `${idPrefix}-paths`,
+      data: paths,
+      getPath: (d) => d.path,
+      getColor: (d) => style.color[d.kind],
+      getWidth: (d) => style.width[d.kind],
+      widthUnits: 'pixels',
+      capRounded: true,
+      jointRounded: true,
+      // Paths are at ground level; keep them visible in front of extruded buildings
+      parameters: { depthCompare: 'always' },
+      updateTriggers: { getColor: style },
+    }),
+    endpoints: new ScatterplotLayer<RouteMarker>({
+      id: `${idPrefix}-endpoints`,
+      data: markers,
+      getPosition: (d) => [d.lng, d.lat],
+      getRadius: 8,
+      radiusUnits: 'pixels',
+      getFillColor: (d) => style.endpointColor[d.kind],
+      getLineColor: [255, 255, 255, 255],
+      getLineWidth: 3,
+      lineWidthUnits: 'pixels',
+      stroked: true,
+      parameters: { depthCompare: 'always' },
+      updateTriggers: { getFillColor: style },
+    }),
+  }
+}
+
+// Bounds the camera fits for an assistant layer, limited to the London area
+function assistantFitBounds(layer: AssistantLayer) {
+  if (layer.focus === 'route' && layer.route) {
+    const bbox = bboxOf([...layer.route.fast.geometry.coordinates, ...layer.route.safe.geometry.coordinates])
+    return bbox && clampFitBounds(bbox)
+  }
+  if (layer.focus === 'area' && layer.area) {
+    return clampFitBounds(layer.area.bbox ?? bboxAround(layer.area.center, layer.area.radius_m))
+  }
+  return null
+}
+
+const CARD_POPUP: Omit<PopupOptions, 'onUserClose'> = { offset: 20, className: 'event-popup assistant-card', maxWidth: '220px' }
 
 export function RiskMap({
   events, crime, showCrime, crimeOpacity, crimeAt, onCrimeQuery, selectedId, target, sidebarOpen,
-  onSelect, onHover, onMapClick, theme, route, routeEndpoints, picking,
+  onSelect, onHover, onMapClick, theme, route, routeEndpoints, picking, assistant, chatOpen, onCloseCard, mapContextRef,
 }: Props) {
   const container = useRef<HTMLDivElement>(null)
   const mapRef = useRef<maplibregl.Map | null>(null)
   const overlayRef = useRef<MapboxOverlay | null>(null)
   const [projection, setProjection] = useState(projectionFor(1.5))
   const [heatRadius, setHeatRadius] = useState(HEAT_RADIUS_PX[0])
-  const handlers = useRef({ onSelect, onHover, onMapClick, onCrimeQuery })
+  const handlers = useRef({ onSelect, onHover, onMapClick, onCrimeQuery, onCloseCard })
   const crimeClickable = useRef(false)
-  const sidebarOpenRef = useRef(sidebarOpen)
+  const panelsOpenRef = useRef({ sidebar: sidebarOpen, chat: chatOpen })
   const pickingRef = useRef(false)
   // Current values for the map and deck.gl callbacks, which are registered once.
   // Declared before the effects that read them.
   useEffect(() => {
-    handlers.current = { onSelect, onHover, onMapClick, onCrimeQuery }
-    sidebarOpenRef.current = sidebarOpen
+    handlers.current = { onSelect, onHover, onMapClick, onCrimeQuery, onCloseCard }
+    panelsOpenRef.current = { sidebar: sidebarOpen, chat: chatOpen }
     pickingRef.current = picking ?? false
   })
   const themeRef = useRef(theme)
@@ -197,17 +277,30 @@ export function RiskMap({
     })
     mapRef.current = map
     overlayRef.current = overlay
+    if (mapContextRef) {
+      mapContextRef.current = () => {
+        const round = (v: number) => Number(v.toFixed(5))
+        const b = map.getBounds()
+        const c = map.getCenter()
+        return {
+          center: [round(c.lng), round(c.lat)],
+          bounds: [round(b.getWest()), round(b.getSouth()), round(b.getEast()), round(b.getNorth())],
+          zoom: Number(map.getZoom().toFixed(2)),
+        }
+      }
+    }
     // Console access for debugging: open the app with ?debug
     if (location.search.includes('debug')) {
       Object.assign(window, { __map: map, __overlay: overlay })
     }
     return () => {
       cancelAnimationFrame(frame)
+      if (mapContextRef) mapContextRef.current = null
       map.remove()
       mapRef.current = null
       overlayRef.current = null
     }
-  }, [])
+  }, [mapContextRef])
 
   // setStyle fires 'style.load' again, which restores the projection and buildings
   useEffect(() => {
@@ -222,7 +315,7 @@ export function RiskMap({
     if ('home' in target) map.flyTo({ ...HOME_VIEW, duration: 1500 })
     else if ('bbox' in target) {
       const [west, south, east, north] = target.bbox
-      map.fitBounds([[west, south], [east, north]], { padding: fitPadding(map, sidebarOpenRef.current), duration: 1500, maxZoom: 16 })
+      map.fitBounds([[west, south], [east, north]], { padding: fitPadding(map, panelsOpenRef.current), duration: 1500, maxZoom: 16 })
     } else map.flyTo({ center: [target.lng, target.lat], zoom: target.zoom ?? map.getZoom(), duration: 1500 })
   }, [target])
 
@@ -232,62 +325,115 @@ export function RiskMap({
     if (!map || !route) return
     const coords = [...route.fast.geometry.coordinates, ...route.safe.geometry.coordinates]
     const bounds = coords.reduce((b, c) => b.extend(c), new maplibregl.LngLatBounds(coords[0], coords[0]))
-    map.fitBounds(bounds, { padding: fitPadding(map, sidebarOpenRef.current), duration: 1200, maxZoom: 16 })
+    map.fitBounds(bounds, { padding: fitPadding(map, panelsOpenRef.current), duration: 1200, maxZoom: 16 })
   }, [route])
 
+  // Show the route or the area of a new assistant layer. The nonce changes each time a layer is applied.
+  const assistantRef = useRef(assistant)
+  useEffect(() => {
+    assistantRef.current = assistant
+  })
+  useEffect(() => {
+    const map = mapRef.current
+    const bounds = assistantFitBounds(assistantRef.current)
+    if (!map || !bounds) return
+    const [west, south, east, north] = bounds
+    map.fitBounds([[west, south], [east, north]], { padding: fitPadding(map, panelsOpenRef.current), duration: 1200, maxZoom: 16 })
+  }, [assistant.nonce])
+
   const routeLayers = useMemo(() => {
-    // fast first, so the safe path is drawn over it where they overlap
-    const paths: RoutePath[] = route
-      ? [
-          { kind: 'fast', path: route.fast.geometry.coordinates },
-          { kind: 'safe', path: route.safe.geometry.coordinates },
-        ]
-      : []
     const markers: RouteMarker[] = (['origin', 'destination'] as const).flatMap((kind) => {
       const p = routeEndpoints?.[kind]
       return p ? [{ kind, lng: p.lng, lat: p.lat }] : []
     })
-    return [
-      new PathLayer<RoutePath>({
-        id: 'route-paths',
-        data: paths,
-        getPath: (d) => d.path,
-        getColor: (d) => ROUTE_COLOR[d.kind],
-        getWidth: (d) => (d.kind === 'safe' ? 5 : 7),
-        widthUnits: 'pixels',
-        capRounded: true,
-        jointRounded: true,
-        // Paths are at ground level; keep them visible in front of extruded buildings
-        parameters: { depthCompare: 'always' },
-      }),
-      new ScatterplotLayer<RouteMarker>({
-        id: 'route-endpoints',
-        data: markers,
-        getPosition: (d) => [d.lng, d.lat],
-        getRadius: 8,
-        radiusUnits: 'pixels',
-        getFillColor: (d) => ENDPOINT_COLOR[d.kind],
-        getLineColor: [255, 255, 255, 255],
-        getLineWidth: 3,
-        lineWidthUnits: 'pixels',
-        stroked: true,
-        parameters: { depthCompare: 'always' },
-      }),
-    ]
+    const { paths, endpoints } = buildRouteLayers('route', route ?? null, markers, MANUAL_ROUTE_STYLE)
+    return [paths, endpoints]
   }, [route, routeEndpoints])
 
-  const selected = useMemo(() => events.find((e) => e.properties.id === selectedId) ?? null, [events, selectedId])
+  // Drawn by the chatbot: the queried area, and a route whose endpoints are the ends of the safe path
+  const assistantRoute = assistant.route
+  const assistantArea = assistant.area
+  const assistantGroundLayers = useMemo(() => {
+    const rgb = ASSISTANT_RGB[theme]
+    const ring = {
+      data: assistantArea ? [assistantArea] : [],
+      getPosition: (a: ChatArea) => a.center,
+      getRadius: (a: ChatArea) => a.radius_m,
+      radiusUnits: 'meters' as const,
+      stroked: true,
+      lineWidthUnits: 'pixels' as const,
+      pickable: false,
+      parameters: { depthCompare: 'always' as const },
+    }
+    const line = assistantRoute?.safe.geometry.coordinates ?? []
+    const markers: RouteMarker[] = line.length
+      ? [
+          { kind: 'origin', lng: line[0][0], lat: line[0][1] },
+          { kind: 'destination', lng: line[line.length - 1][0], lat: line[line.length - 1][1] },
+        ]
+      : []
+    const { paths, endpoints } = buildRouteLayers('assistant-route', assistantRoute, markers, {
+      color: { fast: ASSISTANT_FAST_COLOR, safe: [...rgb, 255] },
+      width: { fast: 4, safe: 6 },
+      endpointColor: { origin: [...rgb, 255], destination: ENDPOINT_COLOR.destination },
+    })
+    return [
+      new ScatterplotLayer<ChatArea>({
+        ...ring,
+        id: 'assistant-area-outline',
+        filled: false,
+        getLineColor: [16, 19, 26, 200],
+        getLineWidth: 5,
+      }),
+      new ScatterplotLayer<ChatArea>({
+        ...ring,
+        id: 'assistant-area',
+        filled: true,
+        getFillColor: [...rgb, 30],
+        getLineColor: [...rgb, 255],
+        getLineWidth: 2,
+        updateTriggers: { getFillColor: theme, getLineColor: theme },
+      }),
+      paths,
+      endpoints,
+    ]
+  }, [assistantRoute, assistantArea, theme])
+
+  // An event of the chatbot can be absent from `events` (hidden by a filter, or not loaded)
+  const assistantEvents = assistant.events
+  const selected = useMemo(
+    () => (selectedId === null ? null : (events.find((e) => e.properties.id === selectedId) ?? assistantEvents.find((e) => e.properties.id === selectedId) ?? null)),
+    [events, assistantEvents, selectedId],
+  )
 
   // Popup anchored at the selected event. Content is rendered by React through a portal.
   // Keyed on id and position so a data refresh does not reopen the popup.
   const selectedKey = selected ? `${selected.properties.id}:${selected.properties.lng},${selected.properties.lat}` : null
+  const eventPopupOptions = useMemo<PopupOptions>(
+    () => ({ ...DETAIL_POPUP, offset: 14, onUserClose: () => handlers.current.onSelect(null) }),
+    [],
+  )
   const eventPopupNode = usePopup(
     mapRef,
     selectedKey,
     selected ? { lng: selected.properties.lng, lat: selected.properties.lat } : null,
-    14,
-    () => handlers.current.onSelect(null),
+    eventPopupOptions,
   )
+
+  // Compact cards of the chatbot's events, one popup per id in assistant.cardIds
+  const cardEvents = useMemo(() => {
+    const byId = new Map(assistantEvents.map((e) => [e.properties.id, e]))
+    return assistant.cardIds.flatMap((id) => byId.get(id) ?? [])
+  }, [assistantEvents, assistant.cardIds])
+  const cardItems = useMemo(
+    () => cardEvents.map((e) => ({ key: e.properties.id, at: { lng: e.properties.lng, lat: e.properties.lat } })),
+    [cardEvents],
+  )
+  const cardPopupOptions = useMemo<PopupOptions>(
+    () => ({ ...CARD_POPUP, onUserClose: (id) => handlers.current.onCloseCard(id) }),
+    [],
+  )
+  const cardNodes = usePopups(mapRef, cardItems, cardPopupOptions)
 
   // Crime summary for a click that hit no event. HeatmapLayer is not pickable, so
   // the rows near the clicked position are looked up in a grid index.
@@ -296,13 +442,11 @@ export function RiskMap({
     () => (crimeIndex && crimeAt ? summariseCrime(crimeIndex, crimeAt) : null),
     [crimeIndex, crimeAt],
   )
-  const crimePopupNode = usePopup(
-    mapRef,
-    crimeAt && showCrime ? `${crimeAt.lng},${crimeAt.lat}` : null,
-    crimeAt,
-    crimePopupOffset,
-    () => handlers.current.onCrimeQuery(null),
+  const crimePopupOptions = useMemo<PopupOptions>(
+    () => ({ ...DETAIL_POPUP, offset: crimePopupOffset, onUserClose: () => handlers.current.onCrimeQuery(null) }),
+    [],
   )
+  const crimePopupNode = usePopup(mapRef, crimeAt && showCrime ? `${crimeAt.lng},${crimeAt.lat}` : null, crimeAt, crimePopupOptions)
   // Area covered by the open crime summary: a circle of CRIME_QUERY_RADIUS_M on the
   // ground around the queried position, and a dot at the position. The white line
   // is drawn over a wider dark line so it is visible on the dark and the light
@@ -429,9 +573,59 @@ export function RiskMap({
     ]
   }, [events, selectedId])
 
+  // Events of the chatbot. The halos are drawn under the event markers and are not
+  // pickable. The markers are drawn from the response itself, over the event
+  // markers, so an event that the filters hide is still shown and clickable.
+  const highlightIds = assistant.highlightIds
+  const assistantHaloLayers = useMemo(() => {
+    const rgb = ASSISTANT_RGB[theme]
+    const highlighted = new Set(highlightIds)
+    const isHighlighted = (f: AssistantEvent) => highlighted.has(f.properties.id)
+    return [
+      new ScatterplotLayer<AssistantEvent>({
+        id: 'assistant-halos',
+        data: assistantEvents,
+        getPosition: (f) => [f.properties.lng, f.properties.lat],
+        getRadius: (f) => (isHighlighted(f) ? 17 : 12),
+        radiusUnits: 'pixels',
+        getFillColor: (f) => [...rgb, isHighlighted(f) ? 90 : 35],
+        getLineColor: (f) => [...rgb, isHighlighted(f) ? 255 : 150],
+        getLineWidth: (f) => (isHighlighted(f) ? 2.5 : 1.5),
+        lineWidthUnits: 'pixels',
+        stroked: true,
+        pickable: false,
+        parameters: { depthCompare: 'always' },
+        updateTriggers: { getFillColor: theme, getLineColor: theme },
+      }),
+    ]
+  }, [assistantEvents, highlightIds, theme])
+  const assistantMarkerLayers = useMemo(() => {
+    const isSelected = (f: AssistantEvent) => f.properties.id === selectedId
+    return [
+      new ScatterplotLayer<AssistantEvent>({
+        id: 'assistant-markers',
+        data: assistantEvents,
+        getPosition: (f) => [f.properties.lng, f.properties.lat],
+        getRadius: (f) => (isSelected(f) ? 11 : 7),
+        radiusUnits: 'pixels',
+        getFillColor: (f) => [...CATEGORY_COLOR[f.properties.category], 255],
+        getLineColor: [255, 255, 255, 255],
+        getLineWidth: (f) => (isSelected(f) ? 3 : 1.5),
+        lineWidthUnits: 'pixels',
+        stroked: true,
+        pickable: true,
+        parameters: { depthCompare: 'always' },
+        updateTriggers: { getRadius: selectedId, getLineWidth: selectedId },
+      }),
+    ]
+  }, [assistantEvents, selectedId])
+
   useEffect(() => {
     overlayRef.current?.setProps({
-      layers: [...layers, ...crimeQueryLayers, ...markerLayers, ...routeLayers],
+      layers: [
+        ...layers, ...crimeQueryLayers, ...assistantGroundLayers, ...assistantHaloLayers, ...markerLayers,
+        ...assistantMarkerLayers, ...routeLayers,
+      ],
       onClick: (info: PickingInfo) => {
         const feature = info.object as EventFeature | undefined
         if (pickingRef.current && info.coordinate) {
@@ -447,7 +641,7 @@ export function RiskMap({
       getTooltip: (info: PickingInfo) => (info.object as EventFeature | undefined)?.properties?.title ?? null,
       getCursor: ({ isHovering }: { isHovering: boolean }) => (isHovering ? 'pointer' : 'crosshair'),
     })
-  }, [layers, crimeQueryLayers, markerLayers, routeLayers])
+  }, [layers, crimeQueryLayers, assistantGroundLayers, assistantHaloLayers, markerLayers, assistantMarkerLayers, routeLayers])
 
   return (
     <>
@@ -455,73 +649,32 @@ export function RiskMap({
       {eventPopupNode && selected && createPortal(<EventDetail event={selected} />, eventPopupNode)}
       {crimePopupNode && crime && crimeAt && crimeSummary &&
         createPortal(<CrimeDetail month={crime.month} pos={crimeAt} summary={crimeSummary} />, crimePopupNode)}
+      {cardEvents.map((e) => {
+        const node = cardNodes.get(e.properties.id)
+        return node && createPortal(
+          <EventCard event={e} alongRoute={assistantRoute !== null} onOpen={(id) => handlers.current.onSelect(id)} />,
+          node,
+          e.properties.id,
+        )
+      })}
     </>
   )
 }
 
-function fitPadding(map: maplibregl.Map, sidebarOpen: boolean) {
+// Both panels are open only on a window wide enough to leave a map area between them
+function fitPadding(map: maplibregl.Map, open: { sidebar: boolean; chat: boolean }) {
   const wide = map.getContainer().clientWidth > 800
-  return { top: 60, bottom: 60, right: 60, left: wide && sidebarOpen ? SIDEBAR_PADDING : 60 }
+  return { top: 60, bottom: 60, right: wide && open.chat ? CHAT_PADDING : 60, left: wide && open.sidebar ? SIDEBAR_PADDING : 60 }
 }
 
-// MapLibre popup whose content is rendered by React through a portal into the
-// returned node. The popup exists while `key` is not null and is rebuilt when it changes.
+const DETAIL_POPUP = { className: 'event-popup', maxWidth: '360px' }
+
 // The crime popup is placed outside the query circle so it does not cover it:
 // the offset is the circle's radius on screen at the current zoom, plus a gap.
 // 78271.517 m per pixel at zoom 0 on the equator with 512 px tiles.
 function crimePopupOffset(map: maplibregl.Map, at: LngLat): number {
   const metersPerPixel = (78271.517 * Math.cos((at.lat * Math.PI) / 180)) / 2 ** map.getZoom()
   return Math.min(320, CRIME_QUERY_RADIUS_M / metersPerPixel) + 8
-}
-
-type PopupOffset = number | ((map: maplibregl.Map, at: LngLat) => number)
-
-function usePopup(
-  mapRef: RefObject<maplibregl.Map | null>,
-  key: string | null,
-  at: LngLat | null,
-  offset: PopupOffset,
-  onUserClose: () => void,
-): HTMLDivElement | null {
-  const [node, setNode] = useState<HTMLDivElement | null>(null)
-  const latest = useRef({ at, onUserClose })
-  useEffect(() => {
-    latest.current = { at, onUserClose }
-  })
-  useEffect(() => {
-    const map = mapRef.current
-    const pos = latest.current.at
-    if (!map || key === null || !pos) return
-    const content = document.createElement('div')
-    // closeOnClick is off: the click that opens a popup would also close it
-    const offsetNow = () => (typeof offset === 'function' ? offset(map, pos) : offset)
-    const popup = new maplibregl.Popup({ offset: offsetNow(), maxWidth: '360px', closeOnClick: false, className: 'event-popup' })
-      .setLngLat([pos.lng, pos.lat])
-      .setDOMContent(content)
-      .addTo(map)
-    // remove() also fires 'close'; only a close made by the user is reported
-    let disposed = false
-    popup.on('close', () => {
-      if (!disposed) latest.current.onUserClose()
-    })
-    // MapLibre chooses the anchor side from the popup size when it positions the
-    // popup. The content is rendered later through the portal, so position it
-    // again when the size changes; otherwise a tall popup extends past the window edge.
-    const resize = new ResizeObserver(() => popup.setLngLat(popup.getLngLat()))
-    resize.observe(content)
-    // An offset that depends on the zoom is recomputed while zooming
-    const onZoom = () => popup.setOffset(offsetNow())
-    if (typeof offset === 'function') map.on('zoom', onZoom)
-    setNode(content)
-    return () => {
-      disposed = true
-      map.off('zoom', onZoom)
-      resize.disconnect()
-      popup.remove()
-      setNode(null)
-    }
-  }, [mapRef, key, offset])
-  return node
 }
 
 function add3dBuildings(map: maplibregl.Map, theme: Theme) {
