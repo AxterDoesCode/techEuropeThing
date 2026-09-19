@@ -8,7 +8,6 @@ const SOURCE_NAME: Record<string, string> = {
   met_news: 'Metropolitan Police news',
   mylondon: 'MyLondon',
   standard_london: 'The Standard',
-  ea_floods: 'Environment Agency flood warnings',
 }
 
 const sourceName = (id: string): string => SOURCE_NAME[id] ?? id.replace(/_/g, ' ')
