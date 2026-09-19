@@ -185,6 +185,8 @@ def poll_source(source_id: str) -> dict[str, int]:
     geocode.use_cache(repo)
 
     def map_items(items):
+        if not items:  # Function.map over no inputs never returns
+            return []
         # One container per item, EXTRACT_CONCURRENCY at a time. A failed item is
         # reported as None: it stays pending and the next poll extracts it again.
         results = extract_item.map([source_id] * len(items), items, return_exceptions=True)

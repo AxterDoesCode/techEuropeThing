@@ -122,7 +122,11 @@ def run_poll(source: StructuredSource, repo: Repo, map_items: ItemMapper | None 
             per_item = [(item, [ev] if (ev := source.to_event(item)) is not None else []) for item in items]
         else:
             todo, deferred = _items_to_extract(source, repo, items)
-            if map_items is not None:
+            if not todo:
+                # Nothing new. The mapper is not called: Modal's map over an empty
+                # input never returns.
+                results = []
+            elif map_items is not None:
                 results = map_items(todo)
             else:
                 # The repo is the similar-event lookup of the extraction agent

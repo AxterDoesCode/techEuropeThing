@@ -158,3 +158,14 @@ def test_extractions_per_poll_are_capped_and_the_rest_follow(repo):
     assert sorted(feed.extracted) == sorted(f"id{i}" for i in range(n))
     run_poll(feed, repo)
     assert len(feed.extracted) == n
+
+
+def test_mapper_is_not_called_when_nothing_is_pending(repo):
+    feed = Feed([raw("a", STABBING)])
+    run_poll(feed, repo)
+
+    def mapper(items):
+        raise AssertionError("mapper called with nothing to extract")
+
+    assert run_poll(feed, repo, map_items=mapper)["inserted"] == 0
+    assert run_poll(Feed([raw("b", COURT)]), repo, map_items=mapper)["fetched"] == 1
