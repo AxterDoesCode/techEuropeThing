@@ -83,4 +83,5 @@ class MetNewsSource:
             occurred_at=parsedate_to_datetime(d["pub_date"]),
             source_ids=[self.id],
             urls=[d["link"]] if d.get("link") else [],
+            mergeable=True,
         )

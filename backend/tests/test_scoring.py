@@ -36,6 +36,7 @@ def make_event(lng=SOHO[0], lat=SOHO[1], **kw) -> Event:
         half_life_min=60,
         occurred_at=T0,
         source_ids=["bbc_london"],
+        mergeable=True,
     )
     return Event(**(defaults | kw))
 
@@ -152,9 +153,11 @@ def test_should_merge_rules():
     # property and violent crime share a group
     assert should_merge(a, make_event(category=Category.PROPERTY_CRIME))
     # two structured events are matched by external_ref only
-    assert not should_merge(
-        make_event(external_ref="tfl_road:1"), make_event(external_ref="tfl_road:2")
-    )
+    structured = make_event(external_ref="tfl_road:1", mergeable=False)
+    assert not should_merge(structured, make_event(external_ref="tfl_road:2", mergeable=False))
+    # a news event merges with a structured one, and with another news event that has a ref
+    assert should_merge(structured, make_event(external_ref="met_news:1"))
+    assert should_merge(make_event(external_ref="bbc_london:1"), make_event(external_ref="met_news:1"))
 
 
 def test_merge_combines_sources_and_raises_confidence():

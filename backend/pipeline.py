@@ -64,7 +64,16 @@ def run_poll(source: StructuredSource, repo: Repo) -> dict[str, int]:
                 continue
             ev.raw_item_ids = [raw_ids[item.external_id]]
             events.append(ev)
-        counts["inserted"] = repo.upsert_structured_events(events)
+        # upsert_events also reports merges. Repos without it (test doubles) only
+        # implement upsert_structured_events. `merged` is recorded when non-zero.
+        upsert_events = getattr(repo, "upsert_events", None)
+        if upsert_events is not None:
+            stored = upsert_events(events)
+            counts["inserted"] = stored["inserted"]
+            if stored["merged"]:
+                counts["merged"] = stored["merged"]
+        else:
+            counts["inserted"] = repo.upsert_structured_events(events)
         seen_refs = [ev.external_ref or "" for ev in events]
 
         # An empty result from a snapshot feed is treated as an upstream fault, not

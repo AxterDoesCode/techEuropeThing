@@ -21,8 +21,16 @@ from uuid import UUID, uuid4
 
 import h3
 
-from .models import ENDED_HALF_LIFE_MIN, CellScore, Event, RawItem, utcnow
-from .scoring import MIN_EVENT_RISK
+from .models import CATEGORY_DEFAULTS, ENDED_HALF_LIFE_MIN, Category, CellScore, Event, RawItem, utcnow
+from .scoring import (
+    _M_PER_DEG_LAT,
+    _M_PER_DEG_LNG,
+    MERGE_WINDOW,
+    MIN_EVENT_RISK,
+    distance_m,
+    merge,
+    should_merge,
+)
 
 SCHEMA_PATH = Path(__file__).parent / "sql" / "schema.sql"
 
@@ -118,6 +126,140 @@ def _event_params(ev: Event, now: str) -> dict[str, Any]:
 _COMPARED = ("category", "title", "summary", "geometry", "lng", "lat", "radius_m", "severity", "expires_at")
 
 
+def _event_by_ref(conn: sqlite3.Connection, ref: str | None) -> Event | None:
+    if ref is None:
+        return None
+    row = conn.execute(
+        "select e.* from event_refs r join events e on e.id = r.event_id where r.external_ref = ?",
+        [ref],
+    ).fetchone()
+    return _event_from_row(row) if row else None
+
+
+def _map_ref(conn: sqlite3.Connection, ref: str | None, event_id: str) -> None:
+    if ref is not None:
+        conn.execute(
+            "insert or ignore into event_refs (external_ref, event_id) values (?, ?)",
+            [ref, event_id],
+        )
+
+
+def _is_merged(conn: sqlite3.Connection, ev: Event) -> bool:
+    """True when more than one report was folded into the row."""
+    if len(ev.source_ids) > 1:
+        return True
+    n = conn.execute("select count(*) from event_refs where event_id = ?", [str(ev.id)]).fetchone()[0]
+    return n > 1
+
+
+def _merge_candidates(
+    conn: sqlite3.Connection,
+    category: Category,
+    lng: float,
+    lat: float,
+    occurred_at: datetime,
+    radius_m: float,
+) -> list[Event]:
+    group = CATEGORY_DEFAULTS[category].group
+    categories = [c.value for c, d in CATEGORY_DEFAULTS.items() if d.group == group]
+    # The SQL bounding box uses the same projection as scoring.distance_m, so it
+    # contains every row that the exact distance test below accepts.
+    rows = conn.execute(
+        f"""
+        select * from events
+        where category in ({', '.join('?' * len(categories))})
+          and occurred_at between ? and ?
+          and (ended_at is null or ended_at >= ?)
+          and abs(lat - ?) * ? <= max(?, radius_m)
+          and abs(lng - ?) * ? <= max(?, radius_m)
+        """,
+        [
+            *categories,
+            _ts(occurred_at - MERGE_WINDOW),
+            _ts(occurred_at + MERGE_WINDOW),
+            _ts(occurred_at - MERGE_WINDOW),
+            lat, _M_PER_DEG_LAT, radius_m,
+            lng, _M_PER_DEG_LNG, radius_m,
+        ],
+    ).fetchall()
+    found = []
+    for row in rows:
+        ev = _event_from_row(row)
+        d = distance_m(lng, lat, ev.lng, ev.lat)
+        if d <= max(radius_m, ev.radius_m):
+            found.append((d, ev))
+    found.sort(key=lambda p: p[0])
+    return [ev for _, ev in found]
+
+
+def _merge_target(conn: sqlite3.Connection, ev: Event) -> Event | None:
+    """The existing row that `ev` should be folded into, or None."""
+    # merge_into is set by the extraction agent when it has identified the event
+    # a report refers to. The distance and time tests are skipped for it.
+    merge_into = getattr(ev, "merge_into", None)
+    if merge_into is not None:
+        row = conn.execute("select * from events where id = ?", [str(merge_into)]).fetchone()
+        if row is not None:
+            target = _event_from_row(row)
+            if target.group == ev.group:
+                return target
+    if not ev.mergeable:
+        return None
+    candidates = [
+        c
+        for c in _merge_candidates(conn, ev.category, ev.lng, ev.lat, ev.occurred_at, ev.radius_m)
+        if should_merge(c, ev)
+    ]
+    if not candidates:
+        return None
+    return min(
+        candidates,
+        key=lambda c: (distance_m(ev.lng, ev.lat, c.lng, c.lat), abs(c.occurred_at - ev.occurred_at)),
+    )
+
+
+def _merge_keeping_feed_end(existing: Event, new: Event) -> Event:
+    """scoring.merge, except that an event without decay (half_life_min None) is
+    ended only by its own feed, so a report folded into it does not clear ended_at."""
+    out = merge(existing, new)
+    if existing.half_life_min is None:
+        out.ended_at = existing.ended_at
+    return out
+
+
+def _refresh_merged(existing: Event, ev: Event) -> Event:
+    """Re-apply a report that is already part of the merged row `existing`.
+    Summary is filled when empty, urls and raw_item_ids are unioned, severity
+    only rises and geometry is replaced only by a more precise one. Confidence,
+    category and occurred_at are left unchanged. ended_at is cleared only when the
+    report is the row's own external_ref reappearing upstream."""
+    ended_at = None if ev.external_ref == existing.external_ref else existing.ended_at
+    return merge(existing, ev).model_copy(
+        update={
+            "category": existing.category,
+            "confidence": existing.confidence,
+            "source_confidence": existing.source_confidence,
+            "occurred_at": existing.occurred_at,
+            "ended_at": ended_at,
+        }
+    )
+
+
+def _write_merged(conn: sqlite3.Connection, ev: Event, now: str) -> None:
+    conn.execute(
+        """
+        update events set external_ref = :external_ref, category = :category, summary = :summary,
+          geometry = :geometry, lng = :lng, lat = :lat, radius_m = :radius_m,
+          h3_r10 = :h3_r10, h3_r9 = :h3_r9, h3_r7 = :h3_r7, severity = :severity,
+          confidence = :confidence, source_confidence = :source_confidence,
+          occurred_at = :occurred_at, ended_at = :ended_at, source_ids = :source_ids,
+          raw_item_ids = :raw_item_ids, urls = :urls, updated_at = :now
+        where id = :id
+        """,
+        _event_params(ev, now),
+    )
+
+
 class SqliteRepo:
     """Storage operations used by the polling pipeline and the rescore job."""
 
@@ -170,18 +312,49 @@ class SqliteRepo:
         return ids
 
     def upsert_structured_events(self, events: list[Event]) -> int:
-        """Insert or update by external_ref; returns the number inserted. An
-        unchanged event is not written. An event that reappears upstream has its
-        ended_at cleared."""
+        """Insert or update by external_ref; returns the number inserted. See
+        upsert_events for the rules."""
+        return self.upsert_events(events)["inserted"]
+
+    def upsert_events(self, events: list[Event]) -> dict[str, int]:
+        """Store events; returns {"inserted": n, "merged": m}.
+
+        1. external_ref already in event_refs: update the mapped row. An unchanged
+           event is not written. An event that reappears upstream has its ended_at
+           cleared. Confidence is never changed on this path, so re-polling a
+           source does not raise it.
+        2. Otherwise, when the event is mergeable or names a merge_into target:
+           fold it into the matching existing row (scoring.merge) and map its ref
+           to that row.
+        3. Otherwise insert a new row and map its ref to it.
+
+        An incoming event from a structured feed (mergeable False) never takes
+        path 2, so a structured ref is always the external_ref of its own row.
+        """
         now = _ts(utcnow())
-        inserted = 0
+        inserted = merged = 0
         with _tx() as conn:
             for ev in events:
                 params = _event_params(ev, now)
-                row = conn.execute(
-                    f"select id, ended_at, {', '.join(_COMPARED)} from events where external_ref = ?",
-                    [ev.external_ref],
-                ).fetchone()
+                existing = _event_by_ref(conn, ev.external_ref)
+                if existing is not None and _is_merged(conn, existing):
+                    updated = _refresh_merged(existing, ev)
+                    if updated != existing:
+                        _write_merged(conn, updated, now)
+                    continue
+                target = _merge_target(conn, ev) if existing is None else None
+                if target is not None:
+                    _write_merged(conn, _merge_keeping_feed_end(target, ev), now)
+                    _map_ref(conn, ev.external_ref, str(target.id))
+                    merged += 1
+                    continue
+                row = None
+                if existing is not None:
+                    params["id"] = str(existing.id)
+                    row = conn.execute(
+                        f"select id, ended_at, {', '.join(_COMPARED)} from events where id = ?",
+                        [params["id"]],
+                    ).fetchone()
                 if row is None:
                     conn.execute(
                         """
@@ -198,6 +371,7 @@ class SqliteRepo:
                         """,
                         params,
                     )
+                    _map_ref(conn, ev.external_ref, params["id"])
                     inserted += 1
                 elif row["ended_at"] is not None or any(row[c] != params[c] for c in _COMPARED):
                     conn.execute(
@@ -206,14 +380,34 @@ class SqliteRepo:
                           geometry = :geometry, lng = :lng, lat = :lat, radius_m = :radius_m,
                           h3_r10 = :h3_r10, h3_r9 = :h3_r9, h3_r7 = :h3_r7, severity = :severity,
                           expires_at = :expires_at, ended_at = null, updated_at = :now
-                        where external_ref = :external_ref
+                        where id = :id
                         """,
                         params,
                     )
-        return inserted
+        return {"inserted": inserted, "merged": merged}
+
+    def find_merge_candidates(
+        self, category: str, lng: float, lat: float, occurred_at: datetime, radius_m: float
+    ) -> list[Event]:
+        """Events a new report at (lng, lat, occurred_at) could describe: same
+        category group, occurred_at within MERGE_WINDOW, centroid within
+        max(radius_m, event radius) metres, and not ended more than MERGE_WINDOW
+        before occurred_at. Sorted by distance."""
+        with _tx() as conn:
+            return _merge_candidates(conn, Category(category), lng, lat, occurred_at, radius_m)
 
     def end_missing(self, source_id: str, seen_refs: Iterable[str], at: datetime) -> int:
-        """Mark events of a snapshot source that were not in the latest fetch as ended."""
+        """Mark events of a snapshot source that were not in the latest fetch as ended.
+
+        This keys on events.external_ref, which for a merged row is the first ref
+        only. That is sufficient: events from snapshot sources are structured and
+        are never folded into another row (see upsert_events), so every ref of a
+        snapshot source is the external_ref of its own row. A row that started as
+        a news report carries a news ref, which no snapshot source's prefix
+        matches (news sources have snapshot = False); it ends by half-life decay.
+        A structured row with news reports folded in is ended here when its feed
+        drops it, which is the intended behaviour.
+        """
         seen = set(seen_refs)
         with _tx() as conn:
             rows = conn.execute(

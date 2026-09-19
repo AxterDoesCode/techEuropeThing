@@ -92,6 +92,10 @@ class Event(BaseModel):
     source_ids: list[str]
     raw_item_ids: list[int] = Field(default_factory=list)
     urls: list[str] = Field(default_factory=list)
+    # True for events from unstructured sources (news, manual). Such an event may
+    # be folded into an existing event of the same category group instead of
+    # becoming a new row. Not stored and not serialised; it only directs storage.
+    mergeable: bool = Field(default=False, exclude=True)
 
     @field_validator("occurred_at", "expires_at", "ended_at")
     @classmethod

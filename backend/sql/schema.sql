@@ -55,6 +55,17 @@ create index if not exists events_h3_r9_idx on events (h3_r9);
 create index if not exists events_updated_at_idx on events (updated_at desc);
 create index if not exists events_ended_at_idx on events (ended_at);
 
+-- Every external_ref that created or was merged into an event. This is the
+-- lookup used by upserts; events.external_ref holds only the first ref of a row.
+create table if not exists event_refs (
+  external_ref text primary key,
+  event_id text not null references events(id)
+);
+create index if not exists event_refs_event_id_idx on event_refs (event_id);
+-- Backfill for databases created before event_refs existed. No-op otherwise.
+insert or ignore into event_refs (external_ref, event_id)
+  select external_ref, id from events where external_ref is not null;
+
 create table if not exists baseline_cells (
   h3 text primary key,
   res integer not null,

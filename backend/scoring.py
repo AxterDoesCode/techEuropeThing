@@ -160,11 +160,12 @@ def _rollup(fine: list[CellScore]) -> list[CellScore]:
 
 
 def should_merge(a: Event, b: Event) -> bool:
-    """True when two events describe the same incident. Events from the same
-    structured source are matched by external_ref instead and never merge here."""
+    """True when two events describe the same incident. At least one of them
+    must be mergeable (from an unstructured source). Two events from structured
+    feeds are matched by external_ref only and never merge here."""
     if a.group != b.group:
         return False
-    if a.external_ref and b.external_ref:
+    if not (a.mergeable or b.mergeable):
         return False
     if abs(a.occurred_at - b.occurred_at) > MERGE_WINDOW:
         return False

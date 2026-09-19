@@ -107,9 +107,9 @@ Order inside the `geocode` tool: (1) UK postcode in text -> `api.postcodes.io` (
 
 ## 5. Database schema
 
-`backend/sql/schema.sql` (SQLite) is the reference. Tables: `sources`, `raw_items` (payload rewritten only when its hash changes), `events`, `baseline_cells`, `crime_points`, `cell_scores`, `agent_runs`, `geocode_cache` (hits and misses).
+`backend/sql/schema.sql` (SQLite) is the reference. Tables: `sources`, `raw_items` (payload rewritten only when its hash changes), `events`, `event_refs`, `baseline_cells`, `crime_points`, `cell_scores`, `agent_runs`, `geocode_cache` (hits and misses).
 
-Conventions: timestamps are ISO 8601 UTC text in one fixed-width format, so text comparison orders them; lists and objects are JSON text; geometry is GeoJSON text with `lng`/`lat` centroid columns for bbox filters; event ids are UUID text generated in Python. `events.external_ref` (`<source_id>:<upstream id>`) is the upsert identity. An upsert writes (and bumps `updated_at`) only when a compared field changed or the event had ended.
+Conventions: timestamps are ISO 8601 UTC text in one fixed-width format, so text comparison orders them; lists and objects are JSON text; geometry is GeoJSON text with `lng`/`lat` centroid columns for bbox filters; event ids are UUID text generated in Python. `events.external_ref` (`<source_id>:<upstream id>`) is the first ref of a row; `event_refs(external_ref, event_id)` maps every ref that created or was merged into an event and is the upsert lookup (backfilled from `events.external_ref` on connect for older database files). An upsert writes (and bumps `updated_at`) only when a compared field changed or the event had ended.
 
 Process model: `db.connect(path)` opens one shared connection; every operation runs under one lock. `SqliteRepo` holds the pipeline's storage operations; pollers in other Modal containers reach it through `RemoteRepo`, which forwards each call to `Store.call`. `run_poll` makes 6 storage calls per poll (events are written in one batch).
 
@@ -162,6 +162,14 @@ Events with `r_i < 0.05` are excluded from scoring (kept in the table for histor
 ### Deduplication and merge
 
 A new event merges into an existing one when: same category group, centroids within `max(radius)` of each other, and `occurred_at` within 3 hours. On merge: union `source_ids`, `urls`, `raw_item_ids`; `confidence = 1 - Π(1 - c_j)` over distinct sources; keep the higher severity and the more precise geometry. For structured sources the upstream id is the identity and merge is an upsert.
+
+Which events may merge is explicit: `Event.mergeable` (not stored, not serialised) is set True by unstructured sources (`met_news`, `bbc_london`, manual). `should_merge` requires at least one mergeable event, so two events from structured feeds never merge. Storage (`SqliteRepo.upsert_events`, returns `{"inserted", "merged"}`; `upsert_structured_events` delegates to it and returns the inserted count) handles each event in this order:
+
+1. `external_ref` found in `event_refs`: update the mapped row, written only when something changed. A row made from one report is updated as a structured upsert. A merged row (several sources or several refs) only has its summary filled when empty, `urls`/`raw_item_ids` unioned, severity raised and geometry replaced by a more precise one; confidence is not touched, so re-polling a source does not raise it.
+2. Otherwise, if the event has `merge_into` (set by the extraction agent) and that event exists in the same category group, merge into it without the distance and time tests. Otherwise, if the event is mergeable, take `find_merge_candidates(category, lng, lat, occurred_at, radius_m)` filtered by `should_merge` and merge into the closest (distance, then time). The merged row keeps its id, title and first `external_ref`; the new ref is added to `event_refs`. `run_poll` records `merged` in its counts when non-zero.
+3. Otherwise insert a new row and its `event_refs` mapping.
+
+An incoming structured event is never folded into another row, including a news row about the same incident that arrived first; it gets its own row. This keeps every snapshot-source ref equal to its own row's `events.external_ref`, which `end_missing` relies on. A news report can merge into a structured row of the same group (news road closure into a TfL closure): the row stays owned by the feed, keeps `half_life_min = null` and is ended when the feed drops it. Category groups keep a crime report and a road closure at the same place separate.
 
 ## 8. API
 

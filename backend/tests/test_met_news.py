@@ -63,6 +63,7 @@ def test_to_event_street_level(monkeypatch):
     assert ev.radius_m == 250
     assert ev.occurred_at.utcoffset() is not None
     assert ev.half_life_min == met_news.HALF_LIFE_MIN
+    assert ev.mergeable
 
 
 def test_to_event_area_level_lowers_confidence_and_widens_radius(monkeypatch):
