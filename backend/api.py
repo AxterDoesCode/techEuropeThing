@@ -9,12 +9,14 @@ from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.middleware.cors import CORSMiddleware
 
 from . import db
+from .api_inject import router as inject_router
 from .models import Category, CellScore, Event, utcnow
 from .scoring import COARSE_RES, FINE_RES, MIN_EVENT_RISK, event_risk
 
 web = FastAPI(title="London Live Risk Map API")
 web.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 web.add_middleware(GZipMiddleware, minimum_size=10_000)
+web.include_router(inject_router)
 
 
 def _parse_bbox(bbox: str | None) -> tuple[float, float, float, float] | None:

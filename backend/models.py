@@ -96,6 +96,9 @@ class Event(BaseModel):
     # be folded into an existing event of the same category group instead of
     # becoming a new row. Not stored and not serialised; it only directs storage.
     mergeable: bool = Field(default=False, exclude=True)
+    # Set by the extraction agent when the item is follow-up reporting on an
+    # existing event. Not stored and not serialised; consumed by the storage merge step.
+    merge_into: UUID | None = Field(default=None, exclude=True)
 
     @field_validator("occurred_at", "expires_at", "ended_at")
     @classmethod

@@ -40,7 +40,7 @@ LOCAL_PATH = "/tmp/risk.sqlite"
 SNAPSHOT_INTERVAL_S = 30
 
 
-@app.cls(volumes={VOLUME_DIR: volume}, max_containers=1, min_containers=1, timeout=3600)
+@app.cls(volumes={VOLUME_DIR: volume}, max_containers=1, min_containers=1, timeout=3600, secrets=secrets)
 @modal.concurrent(max_inputs=100)
 class Store:
     @modal.enter()
@@ -112,7 +112,7 @@ class RemoteRepo:
         return lambda *args, **kwargs: deployed_store().call.remote(method, *args, **kwargs)
 
 
-@app.function(timeout=300, max_containers=20, secrets=secrets)
+@app.function(timeout=900, max_containers=20, secrets=secrets)
 def poll_source(source_id: str) -> dict[str, int]:
     from . import geocode
     from .pipeline import SOURCES, run_poll
@@ -124,13 +124,13 @@ def poll_source(source_id: str) -> dict[str, int]:
     return counts
 
 
-@app.function(schedule=modal.Cron("* * * * *"))
+@app.function(schedule=modal.Cron("* * * * *"), secrets=secrets)
 def dispatcher() -> None:
     from .models import utcnow
-    from .pipeline import SOURCES
+    from .pipeline import is_pollable
 
     for source_id in RemoteRepo().due_sources(utcnow()):
-        if source_id in SOURCES:
+        if is_pollable(source_id):
             poll_source.spawn(source_id)
 
 

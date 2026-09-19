@@ -17,7 +17,7 @@ import time
 from . import db, geocode
 from .db import SqliteRepo
 from .models import utcnow
-from .pipeline import SOURCES, run_poll, run_rescore
+from .pipeline import SOURCES, is_pollable, run_poll, run_rescore
 from .scoring import FINE_RES
 
 TICK_S = 30
@@ -35,7 +35,7 @@ def load_police(repo: SqliteRepo) -> None:
 
 def tick(repo: SqliteRepo) -> None:
     for source_id in repo.due_sources(utcnow()):
-        if source_id not in SOURCES:
+        if not is_pollable(source_id):
             continue
         try:
             print(source_id, run_poll(SOURCES[source_id], repo))

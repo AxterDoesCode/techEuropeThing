@@ -1,6 +1,6 @@
 import pytest
 
-from backend import extract_rules
+from backend import extract_rules, extraction
 from backend.geocode import GeoResult
 from backend.models import Category, RawItem
 from backend.prefilter import is_incident_candidate
@@ -44,6 +44,11 @@ def test_rule_extraction_needs_a_place():
     assert extract_rules.extract("Appeal after assault in London") is None
 
 
+@pytest.fixture(autouse=True)
+def _rules_path(monkeypatch):
+    monkeypatch.delenv("LLM_MODEL", raising=False)
+
+
 def _raw(title):
     payload = {
         "title": title,
@@ -56,7 +61,7 @@ def _raw(title):
 
 
 def test_to_event_street_level(monkeypatch):
-    monkeypatch.setattr(met_news, "geocode", lambda _: GeoResult(-0.1104, 51.5289, 150, "x", "test"))
+    monkeypatch.setattr(extraction, "geocode", lambda _: GeoResult(-0.1104, 51.5289, 150, "x", "test"))
     ev = met_news.MetNewsSource().to_event(_raw(INCIDENTS[0]))
     assert ev.external_ref == "met_news:guid-1"
     assert ev.confidence == pytest.approx(0.9)
@@ -67,14 +72,14 @@ def test_to_event_street_level(monkeypatch):
 
 
 def test_to_event_area_level_lowers_confidence_and_widens_radius(monkeypatch):
-    monkeypatch.setattr(met_news, "geocode", lambda _: GeoResult(-0.0562, 51.5303, 2600, "x", "test"))
+    monkeypatch.setattr(extraction, "geocode", lambda _: GeoResult(-0.0562, 51.5303, 2600, "x", "test"))
     ev = met_news.MetNewsSource().to_event(_raw(INCIDENTS[1]))
     assert ev.confidence == pytest.approx(0.9 * 0.6)
     assert ev.radius_m == 2600
 
 
 def test_to_event_discards_unresolved_places_and_filtered_items(monkeypatch):
-    monkeypatch.setattr(met_news, "geocode", lambda _: None)
+    monkeypatch.setattr(extraction, "geocode", lambda _: None)
     assert met_news.MetNewsSource().to_event(_raw(INCIDENTS[0])) is None
-    monkeypatch.setattr(met_news, "geocode", lambda _: pytest.fail("geocoder called for a filtered item"))
+    monkeypatch.setattr(extraction, "geocode", lambda _: pytest.fail("geocoder called for a filtered item"))
     assert met_news.MetNewsSource().to_event(_raw(NOT_INCIDENTS[0])) is None
