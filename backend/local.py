@@ -24,13 +24,15 @@ TICK_S = 30
 
 
 def load_police(repo: SqliteRepo) -> None:
-    from .sources import police_uk
+    from .sources import mps_lsoa
 
-    month, crimes = police_uk.fetch_month()
-    points = police_uk.aggregate_points(crimes)
-    repo.replace_baseline(police_uk.baseline_cells(points, months=1, res=FINE_RES), FINE_RES)
-    repo.save_crime_points(month, police_uk.points_payload(points, month))
-    print(f"police.uk {month}: {len(crimes)} crimes at {len(points)} street points")
+    # Street length per LSOA comes from the routing graph; without the file every
+    # LSOA is normalised by area (mps_lsoa module docstring)
+    graph = mps_lsoa.load_graph_if_present(os.environ.get("GRAPH_PATH", "data/graph/walk.npz"))
+    result = mps_lsoa.build(graph)
+    repo.replace_baseline(result.cells(FINE_RES), FINE_RES)
+    repo.save_crime_points(result.month, result.payload())
+    print(f"MPS LSOA {result.period} on police.uk {result.month} street points: {result.stats}")
 
 
 def tick(repo: SqliteRepo) -> None:

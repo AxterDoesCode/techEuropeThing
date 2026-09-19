@@ -228,19 +228,21 @@ def rescore() -> None:
     print("cells written:", deployed_store().rescore.remote())
 
 
-@app.function(timeout=900)
+@app.function(volumes={GRAPH_DIR: graph_volume}, timeout=900, memory=4096)
 def backfill_police(month: str = "") -> dict[str, int]:
-    """Load one month of police.uk data (default: latest) as the baseline layer."""
+    """Load the crime baseline: 12 months of MPS LSOA counts per km of walkable
+    street, placed on the police.uk street points of one month (default: latest).
+    Reads the routing graph for street lengths; run build_graph first, otherwise
+    every LSOA is normalised by area (mps_lsoa module docstring)."""
     from .scoring import FINE_RES
-    from .sources import police_uk
+    from .sources import mps_lsoa
 
-    resolved, crimes = police_uk.fetch_month(month or None)
-    points = police_uk.aggregate_points(crimes)
+    result = mps_lsoa.build(mps_lsoa.load_graph_if_present(GRAPH_PATH), month or None)
     repo = RemoteRepo()
-    repo.replace_baseline(police_uk.baseline_cells(points, months=1, res=FINE_RES), FINE_RES)
-    repo.save_crime_points(resolved, police_uk.points_payload(points, resolved))
-    counts = {"crimes": len(crimes), "points": len(points)}
-    print(resolved, counts)
+    repo.replace_baseline(result.cells(FINE_RES), FINE_RES)
+    repo.save_crime_points(result.month, result.payload())
+    counts = {k: v for k, v in result.stats.items() if isinstance(v, int)}
+    print(result.period, result.month, result.stats)
     return counts
 
 

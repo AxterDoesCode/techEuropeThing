@@ -45,14 +45,15 @@ const HEAT_RADIUS_M = 300
 const HEAT_RADIUS_PX: [number, number] = [30, 160]
 // Colour domain in weighted crimes per hectare per month for the 300 m kernel.
 // At the first value the layer reaches the full alpha of the ramp (below it alpha
-// falls linearly to 0); the second is the end of the ramp (red). In the July 2026
-// data the 300 m density at street points with recorded crime has median 1.0,
-// 90th percentile 3.4, 99th percentile 10 and maximum 34 (Soho), so most of
-// London is left undrawn.
-const HEAT_DENSITY_DOMAIN: [number, number] = [4, 40]
-// A wider kernel averages the peaks away (at 714 m: 99th percentile 5.2, maximum
-// 20), so the domain is lowered with the kernel radius by these exponents, down
-// to [2, 12] at 714 m and no further than HEAT_MAX_WIDENING. The colour of a place
+// falls linearly to 0); the second is the end of the ramp (red). The weights are
+// 12-month MPS LSOA values for pedestrian-relevant offences, distributed on street
+// points (backend/sources/mps_lsoa.py). In the 2025-09..2026-08 data the 300 m
+// density at street points has median 0.39, 90th percentile 1.2, 99th percentile
+// 3.8 and maximum 14 (Soho), so most of London is left undrawn.
+const HEAT_DENSITY_DOMAIN: [number, number] = [1.5, 15]
+// A wider kernel averages the peaks away (at 714 m: 99th percentile 1.9, maximum
+// 7.5), so the domain is lowered with the kernel radius by these exponents, down
+// to [0.75, 4.5] at 714 m and no further than HEAT_MAX_WIDENING. The colour of a place
 // therefore depends on the zoom level, but not on the viewport or on how the map
 // was navigated.
 const HEAT_DOMAIN_EXPONENT: [number, number] = [0.8, 1.39]
