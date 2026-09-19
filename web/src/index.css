@@ -93,3 +93,33 @@ html, body, #root, .app { height: 100%; margin: 0; }
   .header, .left { width: calc(100% - 24px); }
   .left { top: auto; height: 45%; }
 }
+
+/* Walking route panel */
+.route form { display: flex; flex-direction: column; gap: 8px; }
+.route .endpoint { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: end; }
+.route label { display: flex; flex-direction: column; gap: 3px; font-size: 11px; color: var(--muted); }
+.route input[type='text'] { width: 100%; background: var(--hover); border: 1px solid var(--border); border-radius: 5px; color: var(--text); padding: 5px 6px; font-size: 13px; }
+.route input[aria-invalid='true'] { border-color: #e5484d; }
+.route input[type='range'] { width: 100%; accent-color: var(--accent); }
+.route .alpha code { color: var(--text); }
+.route .alpha .scale-labels { display: flex; justify-content: space-between; }
+.route button { border-radius: 5px; font-size: 12px; cursor: pointer; }
+.route .pick { background: var(--hover); color: var(--text); border: 1px solid var(--border); padding: 6px 10px; min-width: 96px; }
+.route .pick.active { border-color: var(--accent); color: var(--accent); }
+.route .go { background: var(--accent); color: #111; border: 0; padding: 7px 12px; font-size: 13px; font-weight: 600; }
+.route .go:disabled { opacity: 0.4; cursor: default; }
+.route .result { margin-top: 10px; border-top: 1px solid var(--border); padding-top: 8px; }
+.route table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.route th { text-align: left; color: var(--muted); font-weight: 500; }
+.route td, .route th { padding: 3px 4px; }
+.route tbody th { color: var(--text); white-space: nowrap; }
+.route .swatch { display: inline-block; width: 14px; height: 4px; border-radius: 2px; margin-right: 6px; vertical-align: middle; }
+.route .swatch.fast { background: rgb(132, 140, 154); }
+.route .swatch.safe { background: rgb(38, 166, 91); }
+.route .meta { margin: 6px 0 0; }
+
+/* The sidebar scrolls when its panels do not fit; the event feed takes the
+   remaining height and never drops below a usable size. */
+.left { overflow-y: auto; scrollbar-width: thin; }
+.left > .panel { flex-shrink: 0; }
+.left > .feed { flex: 1 0 180px; }

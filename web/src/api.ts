@@ -1,4 +1,4 @@
-import type { AgentStatus, CrimePoints, EventCollection } from './types'
+import type { AgentStatus, CrimePoints, EventCollection, LngLat, RouteResult } from './types'
 
 // Without VITE_API_BASE the client reads the static files written by
 // `python -m backend.tools.export_sample web/public/sample`.
@@ -26,3 +26,21 @@ export function fetchCrimePoints(): Promise<CrimePoints> {
 export const POLL_INTERVAL_MS = 15_000
 // police.uk publishes monthly
 export const CRIME_REFRESH_MS = 6 * 60 * 60 * 1000
+
+// Routing needs the backend; the static sample mode has no equivalent.
+export const ROUTING_AVAILABLE = Boolean(API_BASE)
+
+export async function fetchRoute(origin: LngLat, destination: LngLat, alpha: number): Promise<RouteResult> {
+  if (!API_BASE) throw new Error('Routing needs a backend: set VITE_API_BASE')
+  const resp = await fetch(`${API_BASE}/api/route`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ origin: [origin.lng, origin.lat], destination: [destination.lng, destination.lat], alpha }),
+  })
+  if (!resp.ok) {
+    const body = (await resp.json().catch(() => null)) as { detail?: unknown } | null
+    const detail = typeof body?.detail === 'string' ? body.detail : `${resp.status} ${resp.statusText}`
+    throw new Error(detail)
+  }
+  return resp.json() as Promise<RouteResult>
+}

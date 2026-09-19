@@ -68,3 +68,23 @@ export interface CrimePoints {
   columns: string[]
   rows: CrimeRow[]
 }
+
+export interface RouteLeg {
+  geometry: { type: 'LineString'; coordinates: [number, number][] }
+  length_m: number
+  duration_min: number
+  mean_risk: number
+  max_risk: number
+}
+
+export interface RouteResult {
+  fast: RouteLeg
+  safe: RouteLeg
+  alpha: number
+  beta: number
+  risk_reduction: number
+  extra_distance_m: number
+  attribution: string
+}
+
+export type RouteEndpoint = 'origin' | 'destination'
