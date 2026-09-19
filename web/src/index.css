@@ -41,10 +41,13 @@ html, body, #root, .app { height: 100%; margin: 0; }
 .header { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .header h1 { margin: 0; font-size: 16px; flex: 1; white-space: nowrap; }
 .header .error { flex-basis: 100%; }
-.theme-toggle { background: var(--hover); color: var(--text); border: 1px solid var(--border); border-radius: 5px; padding: 4px 10px; font-size: 12px; cursor: pointer; }
+.view-controls { flex-basis: 100%; display: flex; gap: 6px; }
+.view-controls button, .theme-toggle { background: var(--hover); color: var(--text); border: 1px solid var(--border); border-radius: 5px; padding: 4px 10px; font-size: 12px; cursor: pointer; }
 
 .left { position: absolute; top: 12px; left: 12px; bottom: 12px; width: 340px; display: flex; flex-direction: column; gap: 12px; pointer-events: none; }
 .left > * { pointer-events: auto; }
+.left[hidden] { display: none; }
+.collapsed-controls { position: absolute; top: 12px; left: 12px; flex-basis: auto; padding: 6px; }
 
 .coords .hover { display: flex; justify-content: space-between; margin-bottom: 8px; color: var(--muted); }
 .coords code { color: var(--text); font-size: 13px; }
@@ -55,8 +58,32 @@ html, body, #root, .app { height: 100%; margin: 0; }
 .coords button:disabled { opacity: 0.4; cursor: default; }
 .coords .meta { margin: 8px 0 0; }
 
-.layers label { display: flex; gap: 8px; align-items: flex-start; cursor: pointer; }
-.layers input { margin-top: 3px; accent-color: var(--accent); }
+.layers h2 { margin: 0; }
+.layers:not(.collapsed) h2 { margin-bottom: 8px; }
+.layers .collapse { display: flex; justify-content: space-between; align-items: baseline; width: 100%; padding: 0; background: none; border: 0; color: inherit; font: inherit; letter-spacing: inherit; text-transform: inherit; cursor: pointer; }
+.layers .collapse .state { text-transform: none; letter-spacing: 0; font-size: 11px; }
+.layers .collapse:hover .state { color: var(--text); }
+.layers h3 { display: flex; justify-content: space-between; align-items: baseline; margin: 12px 0 4px; font-size: 12px; font-weight: 600; }
+.layers .shortcuts button { background: none; border: 0; padding: 0 0 0 10px; color: var(--accent); font-size: 12px; cursor: pointer; }
+.layers .shortcuts button:hover { text-decoration: underline; }
+.layers .check { display: flex; gap: 8px; align-items: flex-start; cursor: pointer; }
+.layers input { accent-color: var(--accent); }
+.layers .check input { margin-top: 3px; }
+.layers .sources { list-style: none; margin: 0; padding: 0; }
+.layers .sources .check { align-items: center; padding: 2px 0; }
+.layers .sources .check input { margin-top: 0; }
+.layers .sources .dot { margin-top: 0; }
+.layers .sources .name { flex: 1; }
+.layers .sources .count { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+.layers .slider { display: flex; flex-direction: column; gap: 2px; margin-top: 10px; font-size: 12px; color: var(--muted); }
+.layers .slider span { display: flex; justify-content: space-between; }
+.layers .slider code { color: var(--text); }
+.layers .slider input { width: 100%; margin: 0; }
+.layers .slider input:disabled { opacity: 0.4; }
+.layers p.meta { margin: 4px 0 0; }
+.layers .hidden-count { margin-bottom: 10px; }
+/* Same stops and alpha as HEATMAP_COLORS in RiskMap.tsx */
+.scale.heat { background: linear-gradient(to right, rgba(70,130,200,0.12), rgba(90,190,180,0.47), rgba(240,200,80,0.78), rgba(240,120,50,0.88), rgba(210,30,40,0.92)); }
 .scale { height: 8px; border-radius: 4px; margin: 8px 0 2px; background: linear-gradient(to right, rgb(70,130,200), rgb(90,190,180), rgb(240,200,80), rgb(240,120,50), rgb(210,30,40)); }
 .scale-labels { display: flex; justify-content: space-between; color: var(--muted); font-size: 11px; }
 
@@ -72,6 +99,17 @@ html, body, #root, .app { height: 100%; margin: 0; }
 .detail dl { display: grid; grid-template-columns: auto 1fr; gap: 3px 12px; margin: 10px 0; }
 .detail dt { color: var(--muted); }
 .detail dd { margin: 0; }
+/* The popup has to fit above or below the clicked position */
+.detail { max-height: calc(50vh - 70px); overflow-y: auto; scrollbar-width: thin; }
+.detail h4 { margin: 10px 0 0; font-size: 12px; font-weight: 600; }
+.detail h4 .meta { font-weight: 400; }
+.crime-detail .total { margin: 8px 0 0; }
+.crime-detail .total .meta { display: block; }
+.crime-detail dl { display: block; margin: 4px 0 0; }
+.crime-detail dl div { display: flex; justify-content: space-between; gap: 12px; }
+.crime-detail dt { color: var(--text); }
+.crime-detail dd { font-variant-numeric: tabular-nums; }
+.crime-detail .source { margin-top: 10px; border-top: 1px solid var(--border); padding-top: 6px; font-size: 11px; }
 .detail a { display: block; color: var(--accent); word-break: break-all; font-size: 12px; }
 .event-popup .maplibregl-popup-content {
   background: var(--bg);
@@ -128,4 +166,4 @@ html, body, #root, .app { height: 100%; margin: 0; }
    remaining height and never drops below a usable size. */
 .left { overflow-y: auto; scrollbar-width: thin; }
 .left > .panel { flex-shrink: 0; }
-.left > .feed { flex: 1 0 180px; }
+.left > .feed { flex: 1 0 240px; }
