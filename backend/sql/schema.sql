@@ -124,3 +124,11 @@ insert or ignore into sources (id, kind, poll_interval_s) values
   ('bbc_london', 'unstructured', 600),
   ('standard_london', 'unstructured', 600),
   ('mylondon', 'unstructured', 600);
+
+-- Sources that were deployed once and then removed. Their rows are deleted so they
+-- do not appear in the agents panel; events they created are deleted with them.
+delete from event_refs where external_ref like 'reddit_london:%';
+delete from events where external_ref like 'reddit_london:%';
+delete from agent_runs where source_id = 'reddit_london';
+delete from raw_items where source_id = 'reddit_london';
+delete from sources where id = 'reddit_london';

@@ -118,3 +118,15 @@ def test_snapshot_is_a_usable_copy(repo, tmp_path):
     db.connect(dest)
     assert len(db.events_geojson(utcnow())) == len(FIXTURE) - 1
     assert not Path(str(dest) + ".tmp").exists()
+
+
+def test_removed_source_is_cleaned_up_on_connect(tmp_path):
+    path = tmp_path / "risk.sqlite"
+    db.connect(path)
+    with db._tx() as conn:
+        conn.execute("insert into sources (id, kind, poll_interval_s) values ('reddit_london', 'unstructured', 900)")
+        conn.execute("insert into agent_runs (source_id, started_at) values ('reddit_london', '2026-09-19T16:00:00.000000+00:00')")
+    assert any(a["id"] == "reddit_london" for a in db.agent_status())
+    db.connect(path)
+    assert not any(a["id"] == "reddit_london" for a in db.agent_status())
+    assert any(a["id"] == "tfl_road" for a in db.agent_status())
