@@ -9,7 +9,7 @@ const NEW_EVENT_MS = 60_000
 const RESYNC_MS = 5 * 60_000
 // EventSource does not retry after an HTTP error response; the hook reopens it
 const REOPEN_MS = 5_000
-// The server closes every stream after 10 minutes and EventSource reconnects
+// The server closes every stream after 60 seconds and EventSource reconnects
 // within a few seconds, resuming from Last-Event-ID. An interruption shorter than
 // this is not shown as "polling" and does not cause a full reload.
 const SHORT_GAP_MS = 10_000

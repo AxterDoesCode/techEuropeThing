@@ -37,12 +37,13 @@ html, body, #root, .app { height: 100%; margin: 0; }
 .meta { color: var(--muted); font-size: 12px; margin-top: 2px; }
 .error { color: #e5484d; margin: 6px 0 0; }
 
-.header { position: absolute; top: 12px; left: 12px; width: 340px; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
-.header h1 { margin: 0; font-size: 16px; }
+/* First item of the sidebar column, so its height never overlaps the panels below */
+.header { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.header h1 { margin: 0; font-size: 16px; flex: 1; white-space: nowrap; }
 .header .error { flex-basis: 100%; }
 .theme-toggle { background: var(--hover); color: var(--text); border: 1px solid var(--border); border-radius: 5px; padding: 4px 10px; font-size: 12px; cursor: pointer; }
 
-.left { position: absolute; top: 68px; left: 12px; bottom: 12px; width: 340px; display: flex; flex-direction: column; gap: 12px; pointer-events: none; }
+.left { position: absolute; top: 12px; left: 12px; bottom: 12px; width: 340px; display: flex; flex-direction: column; gap: 12px; pointer-events: none; }
 .left > * { pointer-events: auto; }
 
 .coords .hover { display: flex; justify-content: space-between; margin-bottom: 8px; color: var(--muted); }
@@ -90,7 +91,7 @@ html, body, #root, .app { height: 100%; margin: 0; }
 .agents tr.error td { color: #e5484d; }
 
 @media (max-width: 800px) {
-  .header, .left { width: calc(100% - 24px); }
+  .left { width: calc(100% - 24px); }
   .left { top: auto; height: 45%; }
 }
 
