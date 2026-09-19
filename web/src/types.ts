@@ -70,7 +70,11 @@ export interface AgentStatus {
 export type CrimeRow = [number, number, number, number, string, Record<string, number>]
 
 export interface CrimePoints {
+  // latest police.uk month, used for the street points
   month: string
+  // months of MPS LSOA data behind the weights, e.g. "2025-09..2026-08"
+  period?: string
+  method?: string
   columns: string[]
   rows: CrimeRow[]
 }

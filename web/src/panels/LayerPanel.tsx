@@ -49,7 +49,7 @@ export function LayerPanel({ crime, settings, onChange, sources, totalEvents, sh
               Met Police recorded crime
               <div className="meta">
                 {crime
-                  ? `${monthLabel(crime.month)} · ${total.toLocaleString('en-GB')} crimes at ${crime.rows.length.toLocaleString('en-GB')} street points`
+                  ? `${monthLabel(crime.month)} · ${total.toLocaleString('en-GB')} street crimes at ${crime.rows.filter((r) => r[2] > 0).length.toLocaleString('en-GB')} street points`
                   : 'loading…'}
               </div>
             </span>
