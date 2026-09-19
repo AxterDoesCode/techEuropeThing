@@ -9,7 +9,7 @@ from typing import Any, Literal
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from . import chat, llm
 
@@ -39,8 +39,25 @@ class Message(BaseModel):
     content: str = Field(min_length=1, max_length=2000)
 
 
+class Context(BaseModel):
+    """State of the client's map. Optional; unknown keys are ignored."""
+
+    center: tuple[float, float] | None = Field(None, description="[lng, lat]")
+    bounds: tuple[float, float, float, float] | None = Field(None, description="[west, south, east, north]")
+    zoom: float | None = Field(None, ge=0, le=30)
+    selected_event_id: str | None = Field(None, max_length=64)
+
+    @field_validator("center")
+    @classmethod
+    def _lng_lat(cls, p: tuple[float, float] | None) -> tuple[float, float] | None:
+        if p is not None and not (-180 <= p[0] <= 180 and -90 <= p[1] <= 90):
+            raise ValueError("expected [lng, lat] in degrees")
+        return p
+
+
 class ChatRequest(BaseModel):
     messages: list[Message] = Field(min_length=1, max_length=30)
+    context: Context | None = None
 
 
 @chat_app.post("/api/chat")
@@ -53,6 +70,9 @@ def post_chat(body: ChatRequest, request: Request) -> dict[str, Any]:
     if not _allow(client):
         raise HTTPException(429, f"rate limit: {RATE_LIMIT} questions per {RATE_WINDOW_S // 60} minutes")
     try:
-        return chat.answer([m.model_dump() for m in body.messages])
+        messages = [m.model_dump() for m in body.messages]
+        if body.context is None:
+            return chat.answer(messages)
+        return chat.answer(messages, context=chat.MapContext(**body.context.model_dump()))
     except Exception as exc:  # model errors, exceeded usage limits
         raise HTTPException(502, f"the assistant could not answer: {type(exc).__name__}") from exc
